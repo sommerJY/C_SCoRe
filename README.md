@@ -2,9 +2,9 @@
 
 C-SCoRe (Correlation Signal Co-cluster Reduction) 분석 패키지.
 
-## 0. 설치 / 불러오기
+## 0. Installation
 
-### 필요한 패키지
+### Packages needed
 
 | 용도 | 패키지 (pip 이름) |
 |---|---|
@@ -16,10 +16,12 @@ C-SCoRe (Correlation Signal Co-cluster Reduction) 분석 패키지.
 
 Python 3.9 이상.
 
-### 방법 1: 패키지로 설치 (권장)
+
+
+### installation method 1
 
 ```bash
-cd cscore_pkg
+cd cscore
 pip install -e .              # 기본 패키지까지 같이 설치됨. 코드를 고쳐도 다시 설치할 필요 없음
 pip install -e ".[enrich]"    # MCL, Sankey, GO 까지 쓸 때
 ```
