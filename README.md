@@ -1,8 +1,8 @@
 # cscore
 
-C-SCoRe (Correlation Signal Co-cluster Reduction) 
+C-SCoRe (Correlation Signal Co-cluster Reduction) 분석 패키지.
 
-## install
+## 설치 (처음 한 번)
 
 ```bash
 cd cscore_pkg
@@ -34,3 +34,21 @@ long = cs.pairwise_single(expr, sel)                   # all-pairs
 cap  = cs.graph_process_ckpt(long, 'CAP.csv', n_iter=1000)
 ```
 
+## 고정 입력 포맷으로 한 번에
+
+```python
+# 샘플 ID 가 index, 셋 다 같은 샘플
+expr  = df[gene_list];          expr.index  = df.RNAseqID   # samples x genes
+beh   = df[['PC1']];            beh.index   = df.RNAseqID   # 1 컬럼
+conds = df[['training_class']]; conds.index = df.RNAseqID   # 1 컬럼 (예: 0/1)
+
+out = cs.run_cscore(expr, beh, conds, add_genes=candidates, n_iter=1000, out_dir='results/')
+# out['caps'] = {'all': CAP, 0: CAP, 1: CAP}
+
+spec = cs.cap_pca_spectrum(out['caps']['all']);  cs.plot_pc_spectrum(spec)
+res  = cs.cap_shift(out['caps'], order=(0, 1), n_components=3)   # 1 - 0
+cs.plot_cap_pca_3d(res, highlight=candidates, label_a='Yoked', label_b='Trained')
+
+ts = cs.shift_tsne(res['shift'], perplexity=30, random_state=5)
+cs.plot_shift_tsne(ts, color_col='norm', size_col='norm', highlight=candidates)
+```

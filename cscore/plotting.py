@@ -1,3 +1,4 @@
+"""그림 함수 모음. 모두 savepath 를 줄 때만 저장."""
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
@@ -44,7 +45,7 @@ def plot_cap_clustermap_real(name, CAP, partition, savepath=None):
 
 
 def plot_eigen_results(name, partition, eigen_df, X, Y, b, eigen_corr,
-                       x_id_dict, y_id_dict, x_label='gene', y_label='protein',
+                       x_id_dict, y_id_dict, x_label='A', y_label='B',
                        min_genes=3, savepath=None, top_print=5):
     """X: 모듈을 정의한 omic 발현, Y: 반대 omic 발현.
     3 panel: intra-module corr / eigen->behavior / eigen->Y"""
@@ -104,7 +105,7 @@ def plot_eigen_results(name, partition, eigen_df, X, Y, b, eigen_corr,
 
 
 def plot_module_top_features(name, partition, eigen_df, X, Y, eigen_corr,
-                             x_id_dict, y_id_dict, x_label='gene', y_label='protein',
+                             x_id_dict, y_id_dict, x_label='A', y_label='B',
                              top_n=10, min_genes=3, max_cols=5, savepath=None):
     """모듈별 top X (모듈 내부) 와 top Y (반대 omic) bar."""
     x_cols = list(X.columns)
@@ -157,21 +158,21 @@ def plot_module_top_features(name, partition, eigen_df, X, Y, eigen_corr,
     plt.close(fig_y)
 
 
-def plot_module_module_heatmap(name, mm, gene_partition, prot_partition, savepath=None):
+def plot_module_module_heatmap(name, mm, part_a, part_b, label_a='A', label_b='B', savepath=None):
     corr, pval = mm['module_corr'], mm['pval_matrix']
-    g_ids, p_ids = mm['gene_module_ids'], mm['protein_module_ids']
-    gs = pd.Series(gene_partition).value_counts().to_dict()
-    ps = pd.Series(prot_partition).value_counts().to_dict()
-    gl = [f'{i}\n(n={gs.get(int(i.split("_")[1]), 0)})' for i in g_ids]
-    pl = [f'{i}\n(n={ps.get(int(i.split("_")[1]), 0)})' for i in p_ids]
-    fig, ax = plt.subplots(figsize=(max(4, len(p_ids) * 0.6), max(3, len(g_ids) * 0.6)))
+    A_ids, B_ids = mm['module_ids_a'], mm['module_ids_b']
+    As = pd.Series(part_a).value_counts().to_dict()
+    Bs = pd.Series(part_b).value_counts().to_dict()
+    gl = [f'{i}\n(n={As.get(int(i.split("_")[1]), 0)})' for i in A_ids]
+    pl = [f'{i}\n(n={Bs.get(int(i.split("_")[1]), 0)})' for i in B_ids]
+    fig, ax = plt.subplots(figsize=(max(4, len(B_ids) * 0.6), max(3, len(A_ids) * 0.6)))
     im = ax.imshow(corr, cmap='RdBu_r', vmin=-1, vmax=1, aspect='auto')
-    for i in range(len(g_ids)):
-        for j in range(len(p_ids)):
+    for i in range(len(A_ids)):
+        for j in range(len(B_ids)):
             ax.text(j, i, f"{corr[i, j]:.2f}{'*' if pval[i, j] < 0.05 else ''}", ha='center', va='center', fontsize=7)
-    ax.set_xticks(range(len(p_ids))); ax.set_xticklabels(pl, rotation=45, ha='right', rotation_mode='anchor', fontsize=8)
-    ax.set_yticks(range(len(g_ids))); ax.set_yticklabels(gl, fontsize=8)
-    ax.set_xlabel('Protein module'); ax.set_ylabel('Gene module'); ax.set_title(name)
+    ax.set_xticks(range(len(B_ids))); ax.set_xticklabels(pl, rotation=45, ha='right', rotation_mode='anchor', fontsize=8)
+    ax.set_yticks(range(len(A_ids))); ax.set_yticklabels(gl, fontsize=8)
+    ax.set_xlabel(f'{label_b} module'); ax.set_ylabel(f'{label_a} module'); ax.set_title(name)
     fig.colorbar(im, ax=ax, label='Spearman')
     plt.tight_layout()
     _save(fig, savepath, 'module_module_heatmap')
@@ -192,94 +193,96 @@ def compare_pvals(df, savepath=None):
     plt.close(fig)
 
 
-def plot_module_module_heatmap_with_fmrp(name, mm, gene_partition, prot_partition,
-                                         gene_fmrp_df, prot_fmrp_df, savepath=None):
+def plot_module_module_heatmap_with_geneset(name, mm, part_a, part_b,
+                                         set_df_a, set_df_b, set_label='gene set', label_a='A', label_b='B',
+                                         savepath=None):
     corr, pval = mm['module_corr'], mm['pval_matrix']
-    g_ids, p_ids = mm['gene_module_ids'], mm['protein_module_ids']
-    gs = pd.Series(gene_partition).value_counts().to_dict()
-    ps = pd.Series(prot_partition).value_counts().to_dict()
-    gl = [f'{i}\n(n={gs.get(int(i.split("_")[1]), 0)})' for i in g_ids]
-    pl = [f'{i}\n(n={ps.get(int(i.split("_")[1]), 0)})' for i in p_ids]
+    A_ids, B_ids = mm['module_ids_a'], mm['module_ids_b']
+    As = pd.Series(part_a).value_counts().to_dict()
+    Bs = pd.Series(part_b).value_counts().to_dict()
+    gl = [f'{i}\n(n={As.get(int(i.split("_")[1]), 0)})' for i in A_ids]
+    pl = [f'{i}\n(n={Bs.get(int(i.split("_")[1]), 0)})' for i in B_ids]
 
-    gmap = dict(zip(gene_fmrp_df['module'], -np.log10(gene_fmrp_df['hyper_fdr'].clip(lower=1e-300))))
-    pmap = dict(zip(prot_fmrp_df['module'], -np.log10(prot_fmrp_df['hyper_fdr'].clip(lower=1e-300))))
-    gv = [gmap.get(i, 0) for i in g_ids]
-    pv = [pmap.get(i, 0) for i in p_ids]
+    gmap = dict(zip(set_df_a['module'], -np.log10(set_df_a['hyper_fdr'].clip(lower=1e-300))))
+    pmap = dict(zip(set_df_b['module'], -np.log10(set_df_b['hyper_fdr'].clip(lower=1e-300))))
+    gv = [gmap.get(i, 0) for i in A_ids]
+    pv = [pmap.get(i, 0) for i in B_ids]
 
-    gov = dict(zip(gene_fmrp_df['module'], gene_fmrp_df['n_fmrp_in_module']))
-    pov = dict(zip(prot_fmrp_df['module'], prot_fmrp_df['n_fmrp_in_module']))
-    gn = [gov.get(i, 0) for i in g_ids]
-    pn = [pov.get(i, 0) for i in p_ids]
+    gov = dict(zip(set_df_a['module'], set_df_a['n_target_in_module']))
+    pov = dict(zip(set_df_b['module'], set_df_b['n_target_in_module']))
+    gn = [gov.get(i, 0) for i in A_ids]
+    pn = [pov.get(i, 0) for i in B_ids]
 
-    fig = plt.figure(figsize=(max(6, len(p_ids) * 0.9) + 1.5, max(5, len(g_ids) * 0.9) + 1.5))
-    grid = gridspec.GridSpec(2, 2, width_ratios=[len(p_ids), 1.2], height_ratios=[1, len(g_ids)],
+    fig = plt.figure(figsize=(max(6, len(B_ids) * 0.9) + 1.5, max(5, len(A_ids) * 0.9) + 1.5))
+    grid = gridspec.GridSpec(2, 2, width_ratios=[len(B_ids), 1.2], height_ratios=[1, len(A_ids)],
                              hspace=0.05, wspace=0.05)
     a_top = fig.add_subplot(grid[0, 0])
     a_main = fig.add_subplot(grid[1, 0])
     a_right = fig.add_subplot(grid[1, 1])
     im = a_main.imshow(corr, cmap='RdBu_r', vmin=-1, vmax=1, aspect='auto')
-    for i in range(len(g_ids)):
-        for j in range(len(p_ids)):
+    for i in range(len(A_ids)):
+        for j in range(len(B_ids)):
             a_main.text(j, i, f"{corr[i, j]:.2f}{'*' if pval[i, j] < 0.05 else ''}", ha='center', va='center', fontsize=7)
-    a_main.set_xticks(range(len(p_ids))); a_main.set_xticklabels(pl, rotation=45, ha='right', rotation_mode='anchor', fontsize=8)
-    a_main.set_yticks(range(len(g_ids))); a_main.set_yticklabels(gl, fontsize=8)
-    a_main.set_xlabel('Protein module'); a_main.set_ylabel('Gene module')
+    a_main.set_xticks(range(len(B_ids))); a_main.set_xticklabels(pl, rotation=45, ha='right', rotation_mode='anchor', fontsize=8)
+    a_main.set_yticks(range(len(A_ids))); a_main.set_yticklabels(gl, fontsize=8)
+    a_main.set_xlabel(f'{label_b} module'); a_main.set_ylabel(f'{label_a} module')
 
-    a_top.bar(range(len(p_ids)), pv, color='#4C72B0')
+    a_top.bar(range(len(B_ids)), pv, color='#4C72B0')
     a_top.axhline(-np.log10(0.05), color='red', linestyle='--', linewidth=0.8)
     ymax = max(pv) if pv else 0
     off = max(ymax * 0.03, 0.05)
     for j, (v, n) in enumerate(zip(pv, pn)):
         a_top.text(j, v + off, f'overlap={n}', ha='center', va='bottom', fontsize=6)
     a_top.set_ylim(0, ymax * 1.15 + off)
-    a_top.set_xticks(range(len(p_ids))); a_top.set_xticklabels([])
-    a_top.set_xlim(-0.5, len(p_ids) - 0.5)
-    a_top.set_ylabel('-log10(FDR)\nFMRP', fontsize=7)
-    a_top.set_title(f'{name}: eigen_corr + FMRP target enrichment', fontsize=10)
+    a_top.set_xticks(range(len(B_ids))); a_top.set_xticklabels([])
+    a_top.set_xlim(-0.5, len(B_ids) - 0.5)
+    a_top.set_ylabel(f'-log10(FDR)\n{set_label}', fontsize=7)
+    a_top.set_title(f'{name}: eigen_corr + {set_label} enrichment', fontsize=10)
 
-    a_right.barh(range(len(g_ids)), gv, color='#55A868')
+    a_right.barh(range(len(A_ids)), gv, color='#55A868')
     a_right.axvline(-np.log10(0.05), color='red', linestyle='--', linewidth=0.8)
     xmax = max(gv) if gv else 0
     offr = max(xmax * 0.03, 0.05)
     for i, (v, n) in enumerate(zip(gv, gn)):
         a_right.text(v + offr, i, f'{n}', ha='left', va='center', fontsize=6)
     a_right.set_xlim(0, xmax * 1.25 + offr)
-    a_right.set_yticks(range(len(g_ids))); a_right.set_yticklabels([])
-    a_right.set_ylim(-0.5, len(g_ids) - 0.5)
+    a_right.set_yticks(range(len(A_ids))); a_right.set_yticklabels([])
+    a_right.set_ylim(-0.5, len(A_ids) - 0.5)
     a_right.invert_yaxis()
-    a_right.set_xlabel('-log10(FDR)\nFMRP', fontsize=7)
+    a_right.set_xlabel(f'-log10(FDR)\n{set_label}', fontsize=7)
     fig.colorbar(im, ax=[a_main, a_top, a_right], label='Spearman', shrink=0.6, pad=0.02)
-    _save(fig, savepath, 'heatmap_with_fmrp')
+    _save(fig, savepath, 'heatmap_with_geneset')
     plt.close(fig)
 
 
-def plot_module_module_heatmap_with_fmrp2(name, mm, gene_partition, prot_partition,
-                                          gene_fmrp_df, prot_fmrp_df, savepath=None):
+def plot_module_module_heatmap_with_geneset2(name, mm, part_a, part_b,
+                                          set_df_a, set_df_b, set_label='gene set', label_a='A', label_b='B',
+                                          savepath=None):
     # 회의 결정: dot 크기 = overlap 비율, 색 = correlation 강도, annotation 숫자는 그대로
     # 주의: mm 에 'overlap_matrix' 가 없으면 dot 크기가 전부 0 (compute_module_module_correlations 는 이 키를 만들지 않음)
     corr = mm['module_corr']
     pval = mm['pval_matrix']
-    g_ids, p_ids = mm['gene_module_ids'], mm['protein_module_ids']
-    gs = pd.Series(gene_partition).value_counts().to_dict()
-    ps = pd.Series(prot_partition).value_counts().to_dict()
-    gl = [f'{i}\n(n={gs.get(int(i.split("_")[1]), 0)})' for i in g_ids]
-    pl = [f'{i}\n(n={ps.get(int(i.split("_")[1]), 0)})' for i in p_ids]
-    gmap = dict(zip(gene_fmrp_df['module'], -np.log10(gene_fmrp_df['hyper_fdr'].clip(lower=1e-300))))
-    pmap = dict(zip(prot_fmrp_df['module'], -np.log10(prot_fmrp_df['hyper_fdr'].clip(lower=1e-300))))
-    gv = [gmap.get(i, 0) for i in g_ids]
-    pv = [pmap.get(i, 0) for i in p_ids]
-    gov = dict(zip(gene_fmrp_df['module'], gene_fmrp_df['n_fmrp_in_module']))
-    pov = dict(zip(prot_fmrp_df['module'], prot_fmrp_df['n_fmrp_in_module']))
-    gn = [gov.get(i, 0) for i in g_ids]
-    pn = [pov.get(i, 0) for i in p_ids]
+    A_ids, B_ids = mm['module_ids_a'], mm['module_ids_b']
+    As = pd.Series(part_a).value_counts().to_dict()
+    Bs = pd.Series(part_b).value_counts().to_dict()
+    gl = [f'{i}\n(n={As.get(int(i.split("_")[1]), 0)})' for i in A_ids]
+    pl = [f'{i}\n(n={Bs.get(int(i.split("_")[1]), 0)})' for i in B_ids]
+    gmap = dict(zip(set_df_a['module'], -np.log10(set_df_a['hyper_fdr'].clip(lower=1e-300))))
+    pmap = dict(zip(set_df_b['module'], -np.log10(set_df_b['hyper_fdr'].clip(lower=1e-300))))
+    gv = [gmap.get(i, 0) for i in A_ids]
+    pv = [pmap.get(i, 0) for i in B_ids]
+    gov = dict(zip(set_df_a['module'], set_df_a['n_target_in_module']))
+    pov = dict(zip(set_df_b['module'], set_df_b['n_target_in_module']))
+    gn = [gov.get(i, 0) for i in A_ids]
+    pn = [pov.get(i, 0) for i in B_ids]
     overlap_mat = mm['overlap_matrix'] if 'overlap_matrix' in mm else None
     overlap_ratio = np.zeros_like(corr, dtype=float)
     if overlap_mat is not None:
-        for i in range(len(g_ids)):
-            g_size = gs.get(int(g_ids[i].split("_")[1]), 1)
-            for j in range(len(p_ids)):
+        for i in range(len(A_ids)):
+            g_size = As.get(int(A_ids[i].split("_")[1]), 1)
+            for j in range(len(B_ids)):
                 overlap_ratio[i, j] = overlap_mat[i, j] / g_size if g_size > 0 else 0
-    n_g, n_p = len(g_ids), len(p_ids)
+    n_g, n_p = len(A_ids), len(B_ids)
     main_w = max(6, n_p * 0.9)
     main_h = max(5, n_g * 0.9)
     fig = plt.figure(figsize=(main_w + 3.2, main_h + 2.2))
@@ -305,7 +308,7 @@ def plot_module_module_heatmap_with_fmrp2(name, mm, gene_partition, prot_partiti
                     path_effects=[pe.withStroke(linewidth=1.2, foreground=(1, 1, 1, 0.55))])
     ax.set_xticks(range(n_p)); ax.set_xticklabels(pl, rotation=45, ha='right', rotation_mode='anchor', fontsize=8)
     ax.set_yticks(range(n_g)); ax.set_yticklabels(gl, fontsize=8)
-    ax.set_xlabel('Protein module'); ax.set_ylabel('Gene module')
+    ax.set_xlabel(f'{label_b} module'); ax.set_ylabel(f'{label_a} module')
     ax.set_xlim(-0.5, n_p - 0.5)
     ax.set_ylim(n_g - 0.5, -0.5)
     sm = plt.cm.ScalarMappable(cmap='RdBu_r', norm=norm)
@@ -324,7 +327,7 @@ def plot_module_module_heatmap_with_fmrp2(name, mm, gene_partition, prot_partiti
         a_top.text(j, v + off, f'overlap={n}', ha='center', va='bottom', fontsize=6)
     a_top.set_ylim(0, ymax * 1.15 + off)
     a_top.tick_params(axis='x', labelbottom=False)
-    a_top.set_ylabel('-log10(FDR)\nFMRP', fontsize=7)
+    a_top.set_ylabel(f'-log10(FDR)\n{set_label}', fontsize=7)
     a_top.set_title(f'{name}: eigen_corr(dot color) + overlap(dotsize)', fontsize=11)
     a_right.barh(range(n_g), gv, color='#55A868')
     a_right.axvline(-np.log10(0.05), color='red', linestyle='--', linewidth=0.8)
@@ -334,13 +337,13 @@ def plot_module_module_heatmap_with_fmrp2(name, mm, gene_partition, prot_partiti
         a_right.text(v + offr, i, f'{n}', ha='left', va='center', fontsize=6)
     a_right.set_xlim(0, xmax * 1.25 + offr)
     a_right.tick_params(axis='y', labelleft=False)
-    a_right.set_xlabel('-log10(FDR)\nFMRP', fontsize=7)
+    a_right.set_xlabel(f'-log10(FDR)\n{set_label}', fontsize=7)
     if savepath is not None:
         fig.savefig(savepath, dpi=300, bbox_inches='tight')
     plt.close(fig)
 
 
-def plot_module_preservation_bars(name, df, ref_label='WT (reference)', test_label='KO (test)', savepath=None):
+def plot_module_preservation_bars(name, df, ref_label='reference', test_label='test', savepath=None):
     df = df.copy()
     df['mod_num'] = df['module'].apply(lambda m: int(m.split('_')[1]))
     df = df.sort_values('mod_num')
@@ -370,7 +373,7 @@ def plot_preservation_barh(df, title='', figsize=(2, 5)):
     plt.close(fig)
 
 
-def plot_partition_crosstab(name, partition_a, partition_b, a_label='WT', b_label='KO', savepath=None):
+def plot_partition_crosstab(name, partition_a, partition_b, a_label='A', b_label='B', savepath=None):
     common = set(partition_a) & set(partition_b)
     am = sorted(set(partition_a[g] for g in common))
     bm = sorted(set(partition_b[g] for g in common))
@@ -397,14 +400,15 @@ def plot_partition_crosstab(name, partition_a, partition_b, a_label='WT', b_labe
     plt.close(fig)
 
 
-def plot_pair_dots(tab, n_shared, title, savepath=None, fmrp_r=None, fmrp_p=None):
+def plot_pair_dots(tab, n_shared, title, savepath=None, set_r=None, set_p=None, set_label='gene set',
+                   label_a='A', label_b='B'):
     """칸 색 = 그룹 내 |Spearman|, * = maxT p<0.05, 검은 테두리 = robust, n = 겹친 유전자 수."""
     key = lambda s: int(s.split('_')[1])
-    rm = sorted(tab['rna_module'].unique(), key=key)
-    pm = sorted(tab['prot_module'].unique(), key=key)
-    nr = tab.drop_duplicates('rna_module').set_index('rna_module')['n_rna'].to_dict()
-    npro = tab.drop_duplicates('prot_module').set_index('prot_module')['n_prot'].to_dict()
-    use_f = fmrp_r is not None and fmrp_p is not None
+    rm = sorted(tab['module_a'].unique(), key=key)
+    pm = sorted(tab['module_b'].unique(), key=key)
+    nr = tab.drop_duplicates('module_a').set_index('module_a')['n_a'].to_dict()
+    npro = tab.drop_duplicates('module_b').set_index('module_b')['n_b'].to_dict()
+    use_f = set_r is not None and set_p is not None
     w, h = 2.6 + 0.8 * len(pm), 1.8 + 0.5 * len(rm)
     if use_f:
         fig = plt.figure(figsize=(w + 1.8, h + 1.5))
@@ -417,7 +421,7 @@ def plot_pair_dots(tab, n_shared, title, savepath=None, fmrp_r=None, fmrp_p=None
         fig, ax = plt.subplots(figsize=(w, h))
     norm = plt.Normalize(0, 1)
     for _, rr in tab.iterrows():
-        x, y = pm.index(rr['prot_module']), rm.index(rr['rna_module'])
+        x, y = pm.index(rr['module_b']), rm.index(rr['module_a'])
         ax.add_patch(plt.Rectangle((x - 0.5, y - 0.5), 1, 1, facecolor=plt.cm.YlOrRd(norm(abs(rr['within_r']))),
                                    edgecolor='k' if rr['robust'] else 'white', linewidth=2.5 if rr['robust'] else 0.5))
         ax.text(x, y, f"{abs(rr['within_r']):.2f}{'*' if rr['p_maxT'] < 0.05 else ''}\nn={rr['n_overlap']}",
@@ -428,16 +432,16 @@ def plot_pair_dots(tab, n_shared, title, savepath=None, fmrp_r=None, fmrp_p=None
     ax.set_yticklabels([f'{m}\n(n={nr[m]})' for m in rm], fontsize=8)
     ax.set_xlim(-0.5, len(pm) - 0.5)
     ax.set_ylim(len(rm) - 0.5, -0.5)
-    ax.set_xlabel('PROT module')
-    ax.set_ylabel('RNA module')
+    ax.set_xlabel(f'{label_b} module')
+    ax.set_ylabel(f'{label_a} module')
     if use_f:
         def bars(df, mods):
             d = df.set_index('module')
             v = [-np.log10(max(d.loc[m, 'hyper_fdr'], 1e-300)) if m in d.index else 0 for m in mods]
-            n = [int(d.loc[m, 'n_fmrp_in_module']) if m in d.index else 0 for m in mods]
+            n = [int(d.loc[m, 'n_target_in_module']) if m in d.index else 0 for m in mods]
             return v, n
-        pv, pn = bars(fmrp_p, pm)
-        gv, gn = bars(fmrp_r, rm)
+        pv, pn = bars(set_p, pm)
+        gv, gn = bars(set_r, rm)
         thr = -np.log10(0.05)
         a_top.bar(range(len(pm)), pv, color='#4C72B0')
         a_top.axhline(thr, color='red', ls='--', lw=0.8)
@@ -446,7 +450,7 @@ def plot_pair_dots(tab, n_shared, title, savepath=None, fmrp_r=None, fmrp_p=None
             a_top.text(j, v + off, str(n), ha='center', va='bottom', fontsize=6)
         a_top.set_ylim(0, max(max(pv) * 1.2, thr * 1.3))
         a_top.tick_params(axis='x', labelbottom=False)
-        a_top.set_ylabel('-log10(FDR)\nFMRP', fontsize=7)
+        a_top.set_ylabel(f'-log10(FDR)\n{set_label}', fontsize=7)
         a_right.barh(range(len(rm)), gv, color='#55A868')
         a_right.axvline(thr, color='red', ls='--', lw=0.8)
         offr = max(max(gv) * 0.03, 0.05)
@@ -454,12 +458,12 @@ def plot_pair_dots(tab, n_shared, title, savepath=None, fmrp_r=None, fmrp_p=None
             a_right.text(v + offr, i, str(n), ha='left', va='center', fontsize=6)
         a_right.set_xlim(0, max(max(gv) * 1.3, thr * 1.3))
         a_right.tick_params(axis='y', labelleft=False)
-        a_right.set_xlabel('-log10(FDR)\nFMRP', fontsize=7)
+        a_right.set_xlabel(f'-log10(FDR)\n{set_label}', fontsize=7)
         a_top.set_title(f'{title}\ncolor: within-group |Spearman| (* maxT p<0.05, black box = robust)\n'
-                        f'n = shared genes (among {n_shared}); bar number = FMRP targets in module', fontsize=8)
+                        f'n = shared genes (among {n_shared}); bar number = {set_label} genes in module', fontsize=8)
     else:
         ax.set_title(f'{title}\ncolor: within-group |Spearman| (* maxT p<0.05, black box = robust)\n'
-                     f'n = shared genes in both modules (among {n_shared} detected in both omics)', fontsize=8)
+                     f'n = shared genes in both modules (among {n_shared} detected in both datasets)', fontsize=8)
         fig.colorbar(plt.cm.ScalarMappable(cmap='YlOrRd', norm=norm), ax=ax, label='|Spearman|', shrink=0.6)
         plt.tight_layout()
     if savepath:
@@ -477,4 +481,148 @@ def sunburst_html(df, path, values, title, savepath):
     fig = px.sunburst(df, path=path, values=values, title=title)
     fig.update_layout(margin=dict(t=50, l=0, r=0, b=0))
     fig.write_html(savepath)
+    return fig
+
+
+# ----------------------------------------------------------------------
+# 조건 간 CAP 변화 (shift.py 결과용)
+# ----------------------------------------------------------------------
+def plot_pc_spectrum(spec, savepath=None):
+    """shift.cap_pca_spectrum 결과: eigenvalue / 설명분산 + 누적"""
+    fig, axes = plt.subplots(1, 2, figsize=(8, 3))
+    axes[0].plot(spec['PC'], spec['eigenvalue'], 'o-')
+    axes[0].set_xticks(spec['PC']); axes[0].set_xlabel('PC'); axes[0].set_ylabel('Eigenvalue')
+    axes[0].grid(axis='y')
+    axes[1].bar(spec['PC'], spec['var_ratio'], alpha=0.6)
+    axes[1].plot(spec['PC'], spec['cum_ratio'], 'r--', marker='o', label='Cumulative')
+    axes[1].set_xticks(spec['PC']); axes[1].set_xlabel('PC'); axes[1].set_ylabel('Variance Ratio')
+    axes[1].grid(axis='y')
+    plt.tight_layout()
+    if savepath:
+        fig.savefig(savepath, dpi=300, bbox_inches='tight')
+    return fig
+
+def plot_cap_pca_3d(res, colors=None, highlight=None, label_base=None, label_target=None,
+                    elev=30, azim=90, savepath=None, show=False):
+    """shift.cap_shift 결과: base(왼쪽), target(오른쪽) 의 CAP PCA 점수를 같은 축 범위로 나란히 3D.
+    colors: gene -> 색 (None 이면 target 점수 기준 RGB), highlight: 이름 표시할 유전자 목록
+    show=True: 창을 띄워서 마우스로 돌려볼 수 있음 (창을 닫아야 다음 줄로 넘어감)"""
+    from .shift import rgb_colors
+    Sa, Sb = res['scores'][res['base']], res['scores'][res['target']]
+    cols = list(Sa.columns[:3])
+    colors = rgb_colors(Sb) if colors is None else pd.Series(colors).reindex(Sa.index).fillna('#999999')
+    hl = [g for g in (highlight or []) if g in Sa.index]
+    vr = res['var_ratio']
+    both = pd.concat([Sa[cols], Sb[cols]])
+    lims = [(both[c].min(), both[c].max()) for c in cols]
+    fig = plt.figure(figsize=(16, 6))
+    for k, (S, title) in enumerate([(Sa, label_base or str(res['base'])),
+                                    (Sb, label_target or str(res['target']))]):
+        ax = fig.add_subplot(1, 2, k + 1, projection='3d')
+        rest = [g for g in S.index if g not in hl]
+        ax.scatter(S.loc[rest, cols[0]], S.loc[rest, cols[1]], S.loc[rest, cols[2]],
+                   c=colors.loc[rest].tolist(), marker='o', s=50, alpha=0.5, linewidth=0)
+        if hl:
+            ax.scatter(S.loc[hl, cols[0]], S.loc[hl, cols[1]], S.loc[hl, cols[2]],
+                       c=colors.loc[hl].tolist(), marker='d', s=120, alpha=0.8, edgecolor='black', linewidth=1)
+            for g in hl:
+                ax.text(*S.loc[g, cols].values, g, color='k', fontsize=8)
+        ax.set_title(title)
+        for i, setlab in enumerate([ax.set_xlabel, ax.set_ylabel, ax.set_zlabel]):
+            setlab(f'PC{i + 1} ({vr[i] * 100:.1f}%)')
+        ax.set_xlim(*lims[0]); ax.set_ylim(*lims[1]); ax.set_zlim(*lims[2])
+        ax.view_init(elev=elev, azim=azim)
+    plt.tight_layout()
+    if savepath:
+        fig.savefig(savepath, dpi=300, bbox_inches='tight')
+    if show:                 # 추가
+        plt.show()           # 추가
+    return fig
+
+
+def plot_shift_tsne(tsne_df, color_col='norm', colors=None, highlight=None, cmap='viridis',
+                    size_col=None, title=None, savepath=None):
+    """shift.shift_tsne 결과 2D 그림.
+    color_col: 색으로 쓸 지표 (colors 를 주면 그 색을 그대로 사용, 예: rgb_colors 결과)
+    size_col : 점 크기로 쓸 지표 (None 이면 고정)"""
+    d = tsne_df
+    hl = [g for g in (highlight or []) if g in d.index]
+    rest = [g for g in d.index if g not in hl]
+    size = (lambda idx: d.loc[idx, size_col] * 10) if size_col else (lambda idx: 40)
+    fig, ax = plt.subplots(figsize=(7, 5))
+    if colors is not None:
+        c = pd.Series(colors).reindex(d.index).fillna('#999999')
+        kw = dict()
+        c_rest, c_hl = c.loc[rest].tolist(), c.loc[hl].tolist()
+    else:
+        norm = plt.Normalize(d[color_col].min(), d[color_col].max())
+        kw = dict(cmap=cmap, norm=norm)
+        c_rest, c_hl = d.loc[rest, color_col], d.loc[hl, color_col]
+    sc = ax.scatter(d.loc[rest, 'comp1'], d.loc[rest, 'comp2'], c=c_rest, s=size(rest),
+                    marker='o', alpha=0.5, linewidth=0, **kw)
+    if hl:
+        ax.scatter(d.loc[hl, 'comp1'], d.loc[hl, 'comp2'], c=c_hl, s=size(hl) if size_col else 80,
+                   marker='d', alpha=0.8, linewidth=0, **kw)
+        for g in hl:
+            ax.text(d.loc[g, 'comp1'], d.loc[g, 'comp2'], g, fontsize=9, ha='center')
+    if colors is None:
+        fig.colorbar(sc, ax=ax, label=color_col)
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_title(title or f't-SNE (color: {color_col if colors is None else "custom"})')
+    plt.tight_layout()
+    if savepath:
+        fig.savefig(savepath, dpi=300, bbox_inches='tight')
+    return fig
+
+
+
+
+
+def plot_mcl_scan(scan, title='', savepath=None):
+    """modules.mcl_scan 결과: inflation 별 intra 유사도(파랑) / silhouette(빨강), 숫자 = 클러스터 수"""
+    fig, ax1 = plt.subplots(figsize=(7, 5))
+    ax1.set_title(title)
+    ax1.set_xlabel('Inflation')
+    ax1.set_ylabel('Intra-cluster similarity', color='blue')
+    ax1.plot(scan['inflation'], scan['avg_intra_similarity'], '-o', color='blue')
+    ax1.tick_params(axis='y', labelcolor='blue')
+    ax2 = ax1.twinx()
+    ax2.set_ylabel('Silhouette', color='red')
+    ax2.plot(scan['inflation'], scan['silhouette_score'], '-s', color='red')
+    ax2.tick_params(axis='y', labelcolor='red')
+    for _, r in scan.iterrows():
+        for ax, col in [(ax1, 'avg_intra_similarity'), (ax2, 'silhouette_score')]:
+            if not np.isnan(r[col]):
+                ax.annotate(f"{int(r['num_clusters'])}", (r['inflation'], r[col]),
+                            textcoords='offset points', xytext=(-5, 5), ha='center', fontsize=8)
+    plt.tight_layout()
+    if savepath:
+        fig.savefig(savepath, dpi=300, bbox_inches='tight')
+    return fig
+
+
+def plot_cluster_sankey(labels_base, labels_target, label_base='base', label_target='target',
+                        min_count=2, savepath=None):
+    """base 클러스터 -> target 클러스터로 유전자가 옮겨간 흐름 (plotly html).
+    labels_*: gene -> cluster Series (modules.mcl_clusters 결과). min_count 미만 흐름은 생략."""
+    import plotly.graph_objects as go
+    from matplotlib.colors import to_rgba
+    both = pd.DataFrame({'b': labels_base, 't': labels_target}).dropna()
+    mv = both.groupby(['b', 't']).size().reset_index(name='count')
+    mv = mv[mv['count'] >= min_count].copy()
+    mv['b'] = 'L' + mv['b'].astype(int).astype(str)
+    mv['t'] = 'R' + mv['t'].astype(int).astype(str)
+    nodes = list(mv['b'].unique()) + list(mv['t'].unique())
+    cmap = plt.get_cmap('tab20')
+    base_ids = sorted(mv['b'].unique(), key=lambda s: int(s[1:]))
+    col = {n: tuple(int(255 * v) for v in to_rgba(cmap(i % 20))[:3]) for i, n in enumerate(base_ids)}
+    node_col = [f'rgba{col[n] + (1,)}' if n.startswith('L') else 'rgba(128,128,128,1)' for n in nodes]
+    link_col = [f'rgba{col[n] + (0.4,)}' for n in mv['b']]
+    fig = go.Figure(data=[go.Sankey(
+        node=dict(pad=15, thickness=20, line=dict(color='black', width=0.5), label=nodes, color=node_col),
+        link=dict(source=[nodes.index(x) for x in mv['b']], target=[nodes.index(x) for x in mv['t']],
+                  value=mv['count'].tolist(), color=link_col))])
+    fig.update_layout(title=f'{label_base} (L) -> {label_target} (R)')
+    if savepath:
+        fig.write_html(savepath)
     return fig

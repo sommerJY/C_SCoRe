@@ -143,7 +143,7 @@ def xi_matrix(cache_x, cache_y=None, n_jobs=1):
 
 
 def full_metric_matrices(X, n_jobs=1):
-    """SINGLE 모드: 한 데이터 안 모든 pair. X: (p, n)."""
+    """한 데이터 안 모든 pair. X: (p, n)."""
     cache = build_rank_cache(X)
     n = cache['n']
     XI_asym = xi_matrix(cache, n_jobs=n_jobs)
@@ -165,9 +165,9 @@ def full_metric_matrices(X, n_jobs=1):
                 SCOR2=SCOR2, PCOR2=PCOR2, SIGMA=SIGMA, Z_pv=Z_pv, XI_pv=XI_pv)
 
 
-def cross_metric_matrices(X_rna, X_prot, n_jobs=1):
-    """RNA_PROT 모드: (p_rna x p_prot) 행렬들. symmetric xi = max(xi(r->p), xi(p->r))."""
-    cr, cp = build_rank_cache(X_rna), build_rank_cache(X_prot)
+def cross_metric_matrices(X_a, X_b, n_jobs=1):
+    """두 데이터 A, B 사이 (p_a x p_b) 행렬들 (같은 샘플 축). symmetric xi = max(xi(a->b), xi(b->a))."""
+    cr, cp = build_rank_cache(X_a), build_rank_cache(X_b)
     n = cr['n']
     XI_rp = xi_matrix(cr, cp, n_jobs=n_jobs)
     XI_pr = xi_matrix(cp, cr, n_jobs=n_jobs)
@@ -185,7 +185,7 @@ def cross_metric_matrices(X_rna, X_prot, n_jobs=1):
         return np.nan_to_num(C)
 
     S = _cross_corr(Rr, Rp)
-    P = _cross_corr(np.asarray(X_rna, float), np.asarray(X_prot, float))
+    P = _cross_corr(np.asarray(X_a, float), np.asarray(X_b, float))
     SCOR2, PCOR2 = np.abs(S), np.abs(P)
     SIGMA = np.sqrt(SCOR2 ** 2 + XI_new ** 2)
     z_xi = XI_ori / np.sqrt(0.4 / n)

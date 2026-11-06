@@ -15,21 +15,21 @@ EMPTY_COLS = ['module', 'source', 'native', 'name', 'p_value', 'term_size', 'int
 
 
 # ----------------------------------------------------------------------
-# gene set enrichment (예: FMRP target list)
+# gene set enrichment (모듈별로 주어진 유전자 목록이 몰려 있는지)
 # ----------------------------------------------------------------------
 def gene_set_enrichment(partition, id_dict, target_genes, background_genes=None,
                         n_perm=2000, seed=0, fdr_method='fdr_bh'):
     """모듈별로 target_genes 가 얼마나 몰려 있는지 (hypergeom + permutation)."""
     rng = np.random.default_rng(seed)
-    fmrp_lower = set(s.lower() for s in target_genes)
+    target_lower = set(s.lower() for s in target_genes)
     module_genes = {}
     for name, m in partition.items():
         module_genes.setdefault(m, set()).add(id_dict.get(name, name))
     if background_genes is None:
         background_genes = set().union(*module_genes.values())
     bg_list = sorted(set(s.lower() for s in background_genes))
-    is_fmrp = np.array([g in fmrp_lower for g in bg_list])
-    M, K = len(bg_list), int(is_fmrp.sum())
+    is_target = np.array([g in target_lower for g in bg_list])
+    M, K = len(bg_list), int(is_target.sum())
     bg_set = set(bg_list)
     expected = K / M if M > 0 else np.nan
     rows = []
@@ -37,23 +37,23 @@ def gene_set_enrichment(partition, id_dict, target_genes, background_genes=None,
         gl = set(g.lower() for g in genes) & bg_set
         n = len(gl)
         l2o = {g.lower(): g for g in genes}
-        ov = sorted(l2o[g] for g in gl if g in fmrp_lower)
+        ov = sorted(l2o[g] for g in gl if g in target_lower)
         x = len(ov)
         if n == 0:
             hp = pp = nm = fe = np.nan
         else:
             hp = hypergeom.sf(x - 1, M, K, n)
             if n_perm:
-                null = np.array([is_fmrp[rng.choice(M, size=n, replace=False)].sum() for _ in range(n_perm)])
+                null = np.array([is_target[rng.choice(M, size=n, replace=False)].sum() for _ in range(n_perm)])
                 pp = (np.sum(null >= x) + 1) / (n_perm + 1)
                 nm = null.mean()
             else:
                 pp = nm = np.nan
             fe = (x / n) / expected if expected > 0 else np.nan
-        rows.append(dict(module=f'module_{m}', n_module=n, n_fmrp_in_module=x,
-                         pct_fmrp=(x / n) if n else np.nan, expected_pct_fmrp=expected,
+        rows.append(dict(module=f'module_{m}', n_module=n, n_target_in_module=x,
+                         pct_target=(x / n) if n else np.nan, expected_pct_target=expected,
                          fold_enrichment=fe, hyper_pval=hp, perm_pval=pp, perm_null_mean=nm,
-                         fmrp_genes=ov))
+                         target_genes_in_module=ov))
     df = pd.DataFrame(rows)
     for col, fcol in [('hyper_pval', 'hyper_fdr'), ('perm_pval', 'perm_fdr')]:
         df[fcol] = np.nan
@@ -63,7 +63,6 @@ def gene_set_enrichment(partition, id_dict, target_genes, background_genes=None,
     return df.sort_values('hyper_pval').reset_index(drop=True)
 
 
-compute_fmrp_enrichment = gene_set_enrichment   # 기존 이름 호환 (컬럼명도 그대로)
 
 
 # ----------------------------------------------------------------------
