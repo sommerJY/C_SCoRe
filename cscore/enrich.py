@@ -1,4 +1,4 @@
-"""기능 annotation: gene set enrichment, gProfiler, term clustering."""
+"""Functional annotation: gene set enrichment, gProfiler, term clustering."""
 import numpy as np
 import pandas as pd
 from scipy import sparse
@@ -15,11 +15,11 @@ EMPTY_COLS = ['module', 'source', 'native', 'name', 'p_value', 'term_size', 'int
 
 
 # ----------------------------------------------------------------------
-# gene set enrichment (모듈별로 주어진 유전자 목록이 몰려 있는지)
+# gene set enrichment (whether a given gene list is concentrated in each module)
 # ----------------------------------------------------------------------
 def gene_set_enrichment(partition, id_dict, target_genes, background_genes=None,
                         n_perm=2000, seed=0, fdr_method='fdr_bh'):
-    """모듈별로 target_genes 가 얼마나 몰려 있는지 (hypergeom + permutation)."""
+    """How concentrated target_genes are in each module (hypergeom + permutation)."""
     rng = np.random.default_rng(seed)
     target_lower = set(s.lower() for s in target_genes)
     module_genes = {}
@@ -80,9 +80,9 @@ def run_gprofiler(genes, organism='mmusculus', min_term=5, max_term=1000, min_in
 
 def module_terms(gp, partition, id2sym, min_term=10, max_term=500, min_inter=3, background=None,
                  organism='mmusculus'):
-    """모듈마다 gProfiler.
-    background=None : 그 partition 에 들어간 유전자 전체 (보수적)
-    background=list : 그 omic 에서 검출된 전체 유전자 symbol 등 (검정력 높음)"""
+    """Run gProfiler for each module.
+    background=None : all genes in that partition (conservative)
+    background=list : e.g. symbols of all genes detected in that omic (higher power)"""
     mods = module_symbols(partition, id2sym)
     allg = {s for v in mods.values() for s in v}
     bg = sorted(allg if background is None else (set(background) | allg))
@@ -102,7 +102,7 @@ def module_terms(gp, partition, id2sym, min_term=10, max_term=500, min_inter=3, 
 
 
 def symbol_check(gp, partition, id2sym, organism='mmusculus'):
-    """term hit 이 0 일 때 먼저 볼 것: symbol 이 비었거나 ';' 로 묶였거나 ID 그대로인지"""
+    """What to check first when term hits are 0: whether symbols are empty, joined with ';', or just the ID itself"""
     raw = {g: id2sym.get(g, g) for g in partition}
     ok = {g: s for g, s in raw.items() if isinstance(s, str) and s != ''}
     semi = [s for s in ok.values() if ';' in s]
@@ -118,7 +118,7 @@ def symbol_check(gp, partition, id2sym, organism='mmusculus'):
 
 
 def term_diagnostics(gp, partition, id2sym, universe, organism='mmusculus'):
-    """모듈별로 (a) partition 배경 (b) 검출 전체 유전자 배경 에서 term hit 수 비교."""
+    """For each module, compare the number of term hits with (a) the partition background and (b) the all-detected-genes background."""
     mods = module_symbols(partition, id2sym)
     allg = {s for v in mods.values() for s in v}
     bgs = {'partition': sorted(allg), 'detected': sorted(set(universe) | allg)}
@@ -153,7 +153,7 @@ def build_term_pool(terms_dict):
 
 
 def cluster_terms_nested(pool, term_genes, cuts=(0.3, 0.1)):
-    """term 유전자 Jaccard + average linkage 를 한 번 만들고, 두 높이에서 자름 (nested 보장)"""
+    """Build term-gene Jaccard + average linkage once, then cut at two heights (nested is guaranteed)"""
     ids = [t for t in pool.index if t in term_genes and len(term_genes[t]) >= 3]
     genes = sorted({g for t in ids for g in term_genes[t]})
     gi = {g: i for i, g in enumerate(genes)}
@@ -188,7 +188,7 @@ def summarize_clusters(pool, assign, level):
 
 
 def cluster_gene_sets(term2cat, term_genes, cat_label):
-    """{label: 그 군집에 속한 모든 term 의 유전자 합집합(lower symbol)}"""
+    """{label: union of genes (lower symbol) of all terms belonging to that cluster}"""
     out = {}
     for cid, lab in cat_label.items():
         ts = term2cat.index[term2cat == cid]

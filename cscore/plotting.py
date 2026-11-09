@@ -1,4 +1,4 @@
-"""그림 함수 모음. 모두 savepath 를 줄 때만 저장."""
+"""Collection of plotting functions. All of them save only when savepath is given."""
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
@@ -47,8 +47,8 @@ def plot_cap_clustermap_real(name, CAP, partition, savepath=None):
 def plot_eigen_results(name, partition, eigen_df, X, Y, b, eigen_corr,
                        x_id_dict, y_id_dict, x_label='A', y_label='B',
                        min_genes=3, savepath=None, top_print=5):
-    """X: 모듈을 정의한 omic 발현, Y: 반대 omic 발현.
-    3 panel: intra-module corr / eigen->behavior / eigen->Y"""
+    """X: expression of the omic that defined the modules, Y: expression of the opposite omic.
+    3 panels: intra-module corr / eigen->behavior / eigen->Y"""
     x_pos = {c: i for i, c in enumerate(X.columns)}
     y_cols = list(Y.columns)
     x_vals = X.values
@@ -107,7 +107,7 @@ def plot_eigen_results(name, partition, eigen_df, X, Y, b, eigen_corr,
 def plot_module_top_features(name, partition, eigen_df, X, Y, eigen_corr,
                              x_id_dict, y_id_dict, x_label='A', y_label='B',
                              top_n=10, min_genes=3, max_cols=5, savepath=None):
-    """모듈별 top X (모듈 내부) 와 top Y (반대 omic) bar."""
+    """Bars of top X (inside the module) and top Y (opposite omic) for each module."""
     x_cols = list(X.columns)
     y_cols = list(Y.columns)
     x_vals = X.values
@@ -258,8 +258,8 @@ def plot_module_module_heatmap_with_geneset(name, mm, part_a, part_b,
 def plot_module_module_heatmap_with_geneset2(name, mm, part_a, part_b,
                                           set_df_a, set_df_b, set_label='gene set', label_a='A', label_b='B',
                                           savepath=None):
-    # 회의 결정: dot 크기 = overlap 비율, 색 = correlation 강도, annotation 숫자는 그대로
-    # 주의: mm 에 'overlap_matrix' 가 없으면 dot 크기가 전부 0 (compute_module_module_correlations 는 이 키를 만들지 않음)
+    # Decided in a meeting: dot size = overlap ratio, color = correlation strength, annotation numbers unchanged
+    # Note: if mm has no 'overlap_matrix', all dot sizes are 0 (compute_module_module_correlations does not create this key)
     corr = mm['module_corr']
     pval = mm['pval_matrix']
     A_ids, B_ids = mm['module_ids_a'], mm['module_ids_b']
@@ -402,7 +402,7 @@ def plot_partition_crosstab(name, partition_a, partition_b, a_label='A', b_label
 
 def plot_pair_dots(tab, n_shared, title, savepath=None, set_r=None, set_p=None, set_label='gene set',
                    label_a='A', label_b='B'):
-    """칸 색 = 그룹 내 |Spearman|, * = maxT p<0.05, 검은 테두리 = robust, n = 겹친 유전자 수."""
+    """Cell color = within-group |Spearman|, * = maxT p<0.05, black border = robust, n = number of overlapping genes."""
     key = lambda s: int(s.split('_')[1])
     rm = sorted(tab['module_a'].unique(), key=key)
     pm = sorted(tab['module_b'].unique(), key=key)
@@ -472,11 +472,11 @@ def plot_pair_dots(tab, n_shared, title, savepath=None, set_r=None, set_p=None, 
 
 
 def sunburst_html(df, path, values, title, savepath):
-    """plotly sunburst (interactive html). pip install plotly (png 저장은 kaleido 필요)"""
+    """plotly sunburst (interactive html). pip install plotly (saving png requires kaleido)"""
     try:
         import plotly.express as px
     except ImportError:
-        print('plotly 가 없어서 sunburst 생략: pip install plotly kaleido')
+        print('plotly is not installed, so the sunburst is skipped: pip install plotly kaleido')
         return None
     fig = px.sunburst(df, path=path, values=values, title=title)
     fig.update_layout(margin=dict(t=50, l=0, r=0, b=0))
@@ -485,10 +485,10 @@ def sunburst_html(df, path, values, title, savepath):
 
 
 # ----------------------------------------------------------------------
-# 조건 간 CAP 변화 (shift.py 결과용)
+# CAP change between conditions (for shift.py results)
 # ----------------------------------------------------------------------
 def plot_pc_spectrum(spec, savepath=None):
-    """shift.cap_pca_spectrum 결과: eigenvalue / 설명분산 + 누적"""
+    """shift.cap_pca_spectrum result: eigenvalue / explained variance + cumulative"""
     fig, axes = plt.subplots(1, 2, figsize=(8, 3))
     axes[0].plot(spec['PC'], spec['eigenvalue'], 'o-')
     axes[0].set_xticks(spec['PC']); axes[0].set_xlabel('PC'); axes[0].set_ylabel('Eigenvalue')
@@ -504,9 +504,9 @@ def plot_pc_spectrum(spec, savepath=None):
 
 def plot_cap_pca_3d(res, colors=None, highlight=None, label_base=None, label_target=None,
                     elev=30, azim=90, savepath=None, show=False):
-    """shift.cap_shift 결과: base(왼쪽), target(오른쪽) 의 CAP PCA 점수를 같은 축 범위로 나란히 3D.
-    colors: gene -> 색 (None 이면 target 점수 기준 RGB), highlight: 이름 표시할 유전자 목록
-    show=True: 창을 띄워서 마우스로 돌려볼 수 있음 (창을 닫아야 다음 줄로 넘어감)"""
+    """shift.cap_shift result: 3D plots of the CAP PCA scores of base (left) and target (right) side by side, with the same axis ranges.
+    colors: gene -> color (if None, RGB based on target scores), highlight: list of genes to label by name
+    show=True: opens a window you can rotate with the mouse (close the window to move on to the next line)"""
     from .shift import rgb_colors
     Sa, Sb = res['scores'][res['base']], res['scores'][res['target']]
     cols = list(Sa.columns[:3])
@@ -535,16 +535,16 @@ def plot_cap_pca_3d(res, colors=None, highlight=None, label_base=None, label_tar
     plt.tight_layout()
     if savepath:
         fig.savefig(savepath, dpi=300, bbox_inches='tight')
-    if show:                 # 추가
-        plt.show()           # 추가
+    if show:                 # added
+        plt.show()           # added
     return fig
 
 
 def plot_shift_tsne(tsne_df, color_col='norm', colors=None, highlight=None, cmap='viridis',
                     size_col=None, title=None, savepath=None):
-    """shift.shift_tsne 결과 2D 그림.
-    color_col: 색으로 쓸 지표 (colors 를 주면 그 색을 그대로 사용, 예: rgb_colors 결과)
-    size_col : 점 크기로 쓸 지표 (None 이면 고정)"""
+    """2D plot of the shift.shift_tsne result.
+    color_col: metric used for color (if colors is given, those colors are used as they are, e.g. the rgb_colors result)
+    size_col : metric used for point size (fixed if None)"""
     d = tsne_df
     hl = [g for g in (highlight or []) if g in d.index]
     rest = [g for g in d.index if g not in hl]
@@ -579,7 +579,7 @@ def plot_shift_tsne(tsne_df, color_col='norm', colors=None, highlight=None, cmap
 
 
 def plot_mcl_scan(scan, title='', savepath=None):
-    """modules.mcl_scan 결과: inflation 별 intra 유사도(파랑) / silhouette(빨강), 숫자 = 클러스터 수"""
+    """modules.mcl_scan result: intra similarity (blue) / silhouette (red) per inflation, numbers = number of clusters"""
     fig, ax1 = plt.subplots(figsize=(7, 5))
     ax1.set_title(title)
     ax1.set_xlabel('Inflation')
@@ -603,8 +603,8 @@ def plot_mcl_scan(scan, title='', savepath=None):
 
 def plot_cluster_sankey(labels_base, labels_target, label_base='base', label_target='target',
                         min_count=2, savepath=None):
-    """base 클러스터 -> target 클러스터로 유전자가 옮겨간 흐름 (plotly html).
-    labels_*: gene -> cluster Series (modules.mcl_clusters 결과). min_count 미만 흐름은 생략."""
+    """Flow of genes moving from base clusters to target clusters (plotly html).
+    labels_*: gene -> cluster Series (modules.mcl_clusters result). Flows below min_count are omitted."""
     import plotly.graph_objects as go
     from matplotlib.colors import to_rgba
     both = pd.DataFrame({'b': labels_base, 't': labels_target}).dropna()

@@ -1,4 +1,4 @@
-"""내부 공용 헬퍼 (rank / correlation / 저장)."""
+"""Internal shared helpers (rank / correlation / saving)."""
 import numpy as np
 from scipy.stats import rankdata
 

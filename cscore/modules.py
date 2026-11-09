@@ -1,4 +1,4 @@
-"""CAP -> 모듈: concat similarity, spectral clustering, k 선택, eigengene."""
+"""CAP -> modules: concat similarity, spectral clustering, choosing k, eigengene."""
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
@@ -10,7 +10,7 @@ from sklearn.metrics import silhouette_score, adjusted_rand_score
 # concat similarity -> spectral clustering
 # ----------------------------------------------------------------------
 def make_concat_sim(*caps):
-    """여러 CAP(gene x gene) 을 옆으로 붙여 gene-gene correlation."""
+    """Concatenate several CAPs (gene x gene) side by side and compute gene-gene correlation."""
     idx = caps[0].index
     aligned = [c.loc[idx, idx] for c in caps]
     concat = pd.concat(aligned, axis=1)
@@ -40,7 +40,7 @@ def find_modules_real(affinity, min_modules=3, max_modules=15, verbose=True):
 
 
 def scan_caps(caps, min_modules=3, max_modules=15, min_size=10, title=''):
-    """CAP 리스트 -> concat sim -> k 스캔. (프로젝트별 load_cap 없이 쓰는 일반 버전)"""
+    """List of CAPs -> concat sim -> scan over k. (General version that works without a project-specific load_cap)"""
     sim = make_concat_sim(*caps)
     results, df = find_modules_real(sim, min_modules, max_modules)
     df['size_filt'] = [min(r[3]) >= min_size for r in results]
@@ -104,9 +104,9 @@ def compute_eigengenes_multi(partition, expr_dict, method='pc1', min_genes=3, ve
 
 
 def module_eigengenes(expr, partition, min_genes=3, method='pc1'):
-    """모듈별 대표값. 유전자를 z-score 한 뒤 PC1 (또는 부호 맞춘 평균 'zmean').
-    부호는 '모듈 평균 발현과 양의 상관' 으로 고정 (관례일 뿐, 절대적 방향은 아님).
-    반환: (samples x 'module_k' DataFrame, QC 표: 설명분산, kME 부호 일관성)"""
+    """Representative value per module. Genes are z-scored, then PC1 (or a sign-aligned mean, 'zmean').
+    The sign is fixed so that it correlates positively with the module's mean expression (just a convention, not an absolute direction).
+    Returns: (samples x 'module_k' DataFrame, QC table: explained variance, kME sign consistency)"""
     cols = set(expr.columns)
     out, qc = {}, []
     for m in sorted(set(partition.values())):
@@ -134,11 +134,11 @@ def module_eigengenes(expr, partition, min_genes=3, method='pc1'):
     return pd.DataFrame(out, index=expr.index), pd.DataFrame(qc)
 
 
-signed_eigengenes = module_eigengenes      # 기존 meeting 코드와 호환
+signed_eigengenes = module_eigengenes      # compatible with the existing meeting code
 
 
 # ----------------------------------------------------------------------
-# k 선택
+# Choosing k
 # ----------------------------------------------------------------------
 def _affinity(sim):
     aff = np.nan_to_num(sim.values.copy(), nan=0.0)
@@ -149,10 +149,10 @@ def _affinity(sim):
 
 def k_table(scan, expr, n_rep=10, frac=0.8, seed=0, stab=True, min_size=10, red_thr=0.8,
             stab_min=0.6, sil_tol=0.02):
-    """k 별 판단 근거 한 표.
-    silhouette / 최소 모듈 크기 / 유전자 80% subsample 안정성(ARI) / eigengene 중복도(|r|>red_thr 쌍 수).
-    suggest: 필터 통과 k 중 silhouette 이 (최고 - sil_tol) 이상인 가장 작은 k (parsimony).
-    expr: 모듈을 만든 데이터의 expression (samples x genes, 전체 샘플). 어디까지나 제안이며 최종 k 는 사람이 결정."""
+    """One table of evidence for each k.
+    silhouette / minimum module size / stability under 80% gene subsampling (ARI) / eigengene redundancy (number of pairs with |r|>red_thr).
+    suggest: among k that pass the filters, the smallest k whose silhouette is at least (best - sil_tol) (parsimony).
+    expr: expression of the data the modules were built from (samples x genes, all samples). This is only a suggestion; the final k is chosen by a person."""
     sim = scan['sim']
     aff = _affinity(sim)
     n = len(aff)
@@ -192,9 +192,9 @@ def k_table(scan, expr, n_rep=10, frac=0.8, seed=0, stab=True, min_size=10, red_
 
 
 def redundancy_by_k(scan, expr, groups=None, red_thr=0.8):
-    """k 별 eigengene 쌍 상관 (부호 유지). groups 를 주면 그룹 평균을 뺀 뒤 그룹 내 변동만 사용.
-    r > +red_thr : 같은 방향으로 같이 움직이는 모듈 쌍 = 과분할 후보 (n_pos_redundant_w)
-    r < -red_thr : 반대 방향 = 한 축의 양 끝일 수 있음. 과분할이 아님 (n_neg_w)"""
+    """Eigengene pair correlation for each k (sign kept). If groups is given, group means are subtracted and only within-group variation is used.
+    r > +red_thr : module pairs moving together in the same direction = candidates for over-splitting (n_pos_redundant_w)
+    r < -red_thr : opposite direction = may be the two ends of one axis. Not over-splitting (n_neg_w)"""
     sim = scan['sim']
     g = None if groups is None else np.asarray(groups)
     rows = []
@@ -219,7 +219,7 @@ def redundancy_by_k(scan, expr, groups=None, red_thr=0.8):
 
 
 def refilter_k_table(ktab, red, min_size=10, stab_min=0.6, sil_tol=0.02):
-    """기존 k_table 에 부호 있는 그룹 내 중복도를 붙여 pass / suggest 재계산 (양의 중복만 감점)"""
+    """Attach signed within-group redundancy to an existing k_table and recompute pass / suggest (only positive redundancy is penalized)"""
     drop = [c for c in ['max_eig_corr_w', 'n_redundant_w', 'max_pos_r_w', 'min_neg_r_w', 'n_pos_redundant_w', 'n_neg_w'] if c in ktab]
     df = ktab.drop(columns=drop).join(red)
     ok = (df['min_size'] >= min_size) & (df['n_pos_redundant_w'] == 0)
@@ -234,7 +234,7 @@ def refilter_k_table(ktab, red, min_size=10, stab_min=0.6, sil_tol=0.02):
 
 
 # ----------------------------------------------------------------------
-# partition 유틸
+# partition utilities
 # ----------------------------------------------------------------------
 def module_symbols(partition, id2sym):
     out = {}
@@ -261,7 +261,7 @@ def find_gene_module(partition, id_dict, symbol):
 
 
 def candidate_clusters(partition, id_dict, candidates, verbose=True):
-    """candidate gene 들이 어느 module 에 있는지."""
+    """Which module each candidate gene is in."""
     rows = []
     for g, m in partition.items():
         s = id_dict.get(g, g)
@@ -280,7 +280,7 @@ def candidate_clusters(partition, id_dict, candidates, verbose=True):
 
 
 # ----------------------------------------------------------------------
-# MCL clustering (조건별 CAP 하나씩, 논문 방식)
+# MCL clustering (one CAP per condition, as in the paper)
 # ----------------------------------------------------------------------
 def _mcl_labels(cap, inflation):
     import markov_clustering as mc
@@ -295,8 +295,8 @@ def _mcl_labels(cap, inflation):
 
 
 def mcl_scan(cap, inflations=None, verbose=True):
-    """inflation 별 MCL 결과: 클러스터 수 / 클러스터 내부 cosine 유사도 / silhouette.
-    inflations 기본값: 2.5 ~ 14.5 (0.5 간격, 논문과 동일)"""
+    """MCL results for each inflation: number of clusters / within-cluster cosine similarity / silhouette.
+    inflations default: 2.5 to 14.5 (step 0.5, same as the paper)"""
     from sklearn.metrics.pairwise import cosine_similarity
     if inflations is None:
         inflations = [round(i * 0.5, 2) for i in range(5, 30)]
@@ -329,7 +329,7 @@ def mcl_scan(cap, inflations=None, verbose=True):
 
 
 def mcl_clusters(cap, inflation, candidates=None):
-    """정한 inflation 으로 MCL. 반환: gene -> cluster Series (-1 = 어느 클러스터에도 없음)"""
+    """Run MCL with the chosen inflation. Returns: gene -> cluster Series (-1 = not in any cluster)"""
     lab, clusters = _mcl_labels(cap, inflation)
     print(f"genes={len(lab)}, assigned={int((lab != -1).sum())}, clusters={len(clusters)}")
     if candidates:

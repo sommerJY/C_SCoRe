@@ -4,7 +4,7 @@
     cs.cap.xi_cor(x, y)
     cs.modules.module_eigengenes(expr, partition)
 
-자주 쓰는 함수는 최상위에서도 바로 쓸 수 있음 (cs.xi_cor, cs.graph_process_ckpt ...).
+Frequently used functions are also available directly at the top level (cs.xi_cor, cs.graph_process_ckpt ...).
 """
 from . import cap, modules, compare, enrich, plotting, pipeline, shift
 from .cap import *          # noqa: F401,F403
@@ -16,6 +16,3 @@ from .pipeline import *     # noqa: F401,F403
 from .shift import *        # noqa: F401,F403
 
 __version__ = '0.1.0'
-
-
-

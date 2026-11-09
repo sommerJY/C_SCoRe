@@ -1,34 +1,34 @@
 # cscore
 
-C-SCoRe (Correlation Signal Co-cluster Reduction) 분석 패키지.
+C-SCoRe (Correlation Signal Co-cluster Reduction) analysis package.
 
 ## 0. Installation
 
 ### Packages needed
 
-| 용도 | 패키지 (pip 이름) |
+| Purpose | Packages (pip names) |
 |---|---|
-| 기본 계산 | `numpy`, `pandas`, `scipy`, `statsmodels`, `scikit-learn`, `joblib`, `tqdm` |
-| CAP (Louvain) | `networkx`, `python-louvain` (import 이름은 `community`) |
-| 그림 | `matplotlib`, `seaborn` |
-| MCL, Sankey (7단계) | `markov_clustering`, `plotly` |
-| GO 분석 (enrich.py) | `gprofiler-official` |
+| Core computation | `numpy`, `pandas`, `scipy`, `statsmodels`, `scikit-learn`, `joblib`, `tqdm` |
+| CAP (Louvain) | `networkx`, `python-louvain` (imported as `community`) |
+| Figures | `matplotlib`, `seaborn` |
+| MCL, Sankey (step 7) | `markov_clustering`, `plotly` |
+| GO analysis (enrich.py) | `gprofiler-official` |
 
-Python 3.9 이상.
+Python 3.9 or later.
 
 
 
-### installation method 1
+### Method 1: Install as a package
 
 ```bash
 cd cscore
-pip install -e .              # 기본 패키지까지 같이 설치됨. 코드를 고쳐도 다시 설치할 필요 없음
-pip install -e ".[enrich]"    # MCL, Sankey, GO 까지 쓸 때
+pip install -e .              # Also installs the core packages. No need to reinstall after editing the code.
+pip install -e ".[enrich]"    # Use this if you also need MCL, Sankey, and GO
 ```
 
-### 방법 2: 설치 없이 폴더째 쓰기
+### Method 2: Use the folder directly, without installing
 
-필요한 패키지를 직접 설치한 뒤 경로를 추가해서 불러옴.
+Install the required packages yourself, then add the path and import.
 
 ```bash
 pip install numpy pandas scipy statsmodels scikit-learn joblib tqdm \
@@ -36,50 +36,50 @@ pip install numpy pandas scipy statsmodels scikit-learn joblib tqdm \
             markov_clustering plotly gprofiler-official
 ```
 
-conda 환경을 쓴다면 그 환경을 켠 상태에서 설치할 것 (`conda activate 환경이름`).
-설치했는데 `No module named ...` 가 나오면 다른 환경에 설치된 것.
-Python 안에서 `import sys; print(sys.executable)` 로 지금 환경을 확인하고,
-그 경로로 `/.../bin/python -m pip install 패키지` 처럼 설치하면 확실함.
+If you use a conda environment, install while that environment is active (`conda activate env_name`).
+If you still get `No module named ...`, the package was installed in a different environment.
+Check the current environment in Python with `import sys; print(sys.executable)`,
+then install with that path, e.g. `/.../bin/python -m pip install package_name`, to be sure.
 
-주의: `pip install community` 는 다른 패키지라서 Louvain 이 동작하지 않음. 반드시 `python-louvain`.
+Note: `pip install community` is a different package and Louvain will not work with it. You must install `python-louvain`.
 
 ```python
 import sys
-sys.path.append('/path/to/cscore_pkg')    # cscore 폴더의 바로 위 폴더
+sys.path.append('/path/to/cscore_pkg')    # The folder directly above the cscore folder
 import cscore as cscr
 import numpy as np
 import pandas as pd
 
-out_dir  = '/path/to/data_out/'     # CAP, 표 저장 (미리 만들어 둘 것)
-plot_dir = '/path/to/figures/'      # 그림 저장 (미리 만들어 둘 것)
+out_dir  = '/path/to/data_out/'     # Where CAPs and tables are saved (create it beforehand)
+plot_dir = '/path/to/figures/'      # Where figures are saved (create it beforehand)
 ```
 
-## 구조
+## Structure
 
 ```
 cscore/
-  cap.py       xi_cor, 유전자 vs 행동, pairwise 행렬, consensus Louvain (CAP)
-  pipeline.py  입력 포맷 확인 (check_inputs), 한 번에 돌리기 (run_cscore)
-  shift.py     조건 간 CAP 변화 (PCA shift), RGB 색, t-SNE
-  modules.py   CAP -> 모듈 (spectral, k 선택, eigengene, MCL)
-  compare.py   모듈 비교, within-group 검정, partition 보존, Mantel/CKA
+  cap.py       xi_cor, gene vs behavior, pairwise matrix, consensus Louvain (CAP)
+  pipeline.py  input format check (check_inputs), run everything at once (run_cscore)
+  shift.py     CAP change between conditions (PCA shift), RGB colors, t-SNE
+  modules.py   CAP -> modules (spectral, choosing k, eigengene, MCL)
+  compare.py   module comparison, within-group tests, partition preservation, Mantel/CKA
   enrich.py    gene set enrichment, gProfiler, term clustering
-  plotting.py  그림 (savepath 를 줄 때만 저장)
+  plotting.py  figures (saved only when savepath is given)
 ```
 
 ---
 
-## 기본 분석 (조건 2개 비교)
+## Basic analysis (comparing 2 conditions)
 
-### 1. 입력 만들기
+### 1. Preparing the inputs
 
-세 입력 모두 **index = 같은 샘플 ID**.
+All three inputs must have **the same sample IDs as their index**.
 
-| 이름 | 형태 | 예 |
+| Name | Format | Example |
 |---|---|---|
-| `expr` | samples x genes DataFrame (숫자만) | 정규화된 발현값 |
-| `beh` | 1 컬럼 DataFrame 또는 Series | 행동 PC1 |
-| `conds` | 1 컬럼 DataFrame 또는 Series | 조건 라벨 (0/1, 'yoked'/'trained' 등) |
+| `expr` | samples x genes DataFrame (numeric only) | Normalized expression values |
+| `beh` | 1-column DataFrame or Series | Behavior PC1 |
+| `conds` | 1-column DataFrame or Series | Condition labels (0/1, 'yoked'/'trained', etc.) |
 
 ```python
 df = pd.read_csv('my_data.csv', index_col=0)
@@ -92,24 +92,24 @@ expr2, beh2, conds2 = cscr.check_inputs(expr, beh, conds)
 # [check] samples=14, genes=..., conds={0: 7, 1: 7}
 ```
 
-`check_inputs` 는 샘플 ID 일치, 숫자 여부, NaN, 중복을 확인하고 같은 순서로 맞춰줌.
-값이 모든 샘플에서 같은 유전자는 뺌. **이후 단계에는 `expr2`, `beh2`, `conds2` 를 쓸 것.**
+`check_inputs` checks that sample IDs match, values are numeric, and there are no NaNs or duplicates, and it aligns everything to the same order.
+Genes with identical values across all samples are removed. **Use `expr2`, `beh2`, and `conds2` in the following steps.**
 
-### 2. 행동과 관련된 유전자 고르기
+### 2. Selecting behavior-related genes
 
 ```python
-res_gene = cscr.gene_vs_target(expr2, beh2)        # 유전자마다 Spearman + xi
+res_gene = cscr.gene_vs_target(expr2, beh2)        # Spearman + xi for each gene
 res_gene.to_csv(out_dir + 'gene_scores.csv')
 
 sel = cscr.select_genes(res_gene)                  # Z_pv < 0.05
-required_genes = ['Fos', 'Arc', 'Npas4']           # 항상 넣을 유전자 (예: candidate)
+required_genes = ['Fos', 'Arc', 'Npas4']           # Genes to always include (e.g. candidates)
 sel = sorted(set(sel) | {g for g in required_genes if g in expr2.columns})
 print('selected genes:', len(sel))
 ```
 
-### 3. CAP 만들기 (전체 / 조건별)
+### 3. Building CAPs (overall / per condition)
 
-모든 CAP 은 같은 유전자 목록 (`sel`) 으로 만듦. 대각선은 1.
+All CAPs are built with the same gene list (`sel`). The diagonal is 1.
 
 ```python
 sets = {'all': expr2.index,
@@ -125,78 +125,73 @@ for label, idx in sets.items():
     caps[label] = pd.DataFrame(a, index=sel, columns=sel)
 ```
 
-- 오래 걸리는 단계. 처음에는 `n_iter=20` 으로 끝까지 한 번 돌려본 뒤 1000 으로.
-- `CAP_{label}.convergence.txt` 에 수렴 로그가 남음 (checkpoint 별 상관, split-half 신뢰도).
-- 2~3 단계는 `cscr.run_cscore(expr, beh, conds, add_genes=required_genes, out_dir=out_dir)` 한 줄로도 가능.
-  결과의 `out['caps']` 가 위 `caps` 와 같음.
+- This step takes a long time. First run through once with `n_iter=20`, then run again with 1000.
+- A convergence log is saved to `CAP_{label}.convergence.txt` (correlation per checkpoint, split-half reliability).
+- Steps 2 and 3 can also be done in one line with `cscr.run_cscore(expr, beh, conds, add_genes=required_genes, out_dir=out_dir)`.
+  The resulting `out['caps']` is the same as `caps` above.
 
-### 4. 같은 PCA 공간에서 조건 간 변화 (shift)
+### 4. Change between conditions in the same PCA space (shift)
 
-전체 CAP 으로 PCA 를 fit 하고, 조건별 CAP 을 같은 축으로 옮긴 뒤 유전자마다 이동을 계산.
+Fit PCA on the overall CAP, project each condition's CAP onto the same axes, and compute the shift for each gene.
 
 ```python
 cscr.plot_pc_spectrum(cscr.cap_pca_spectrum(caps['all']),
-                      savepath=plot_dir + 'pc_spectrum.jpg')     # PC 3개로 충분한지 확인
+                      savepath=plot_dir + 'pc_spectrum.jpg')     # Check that 3 PCs are enough
 
 res_shift = cscr.cap_shift(caps, base=0, target=1, n_components=3)   # target - base
 ```
 
-- `base`: 기준 조건, `target`: 비교할 조건. 라벨은 `conds` 의 값 그대로.
-- `res_shift['shift']` 컬럼
-  - `norm`: base -> target 이동 거리
-  - `centroid`, `cent_sim`: 전체 이동 방향에 대한 투영값 / cosine
-  - `PCdot`, `gene_sim`: base 위치와 target 위치의 내적 / cosine (낮을수록 위치가 많이 바뀜)
+- `base`: the reference condition. `target`: the condition to compare. Labels are the values in `conds` as they are.
+- `res_shift['shift']` columns
+  - `norm`: distance moved from base to target
+  - `centroid`, `cent_sim`: projection onto / cosine with the overall direction of movement
+  - `PCdot`, `gene_sim`: dot product / cosine between the base position and the target position (lower means the position changed more)
 
-### 5. 3D 그림 + 순위
+### 5. 3D figure + ranking
 
 ```python
-col = cscr.rgb_colors(res_shift['scores'][1], invert='G')    # target 점수로 RGB 색. invert 로 채널 반전
+col = cscr.rgb_colors(res_shift['scores'][1], invert='G')    # RGB colors from the target score. invert flips a channel
 cscr.plot_cap_pca_3d(res_shift, colors=col, highlight=required_genes,
                      label_base='Yoked', label_target='Trained',
                      savepath=plot_dir + 'cap_pca_3d.jpg')
-# show=True 를 주면 창에서 마우스로 돌려볼 수 있음 (창을 닫아야 다음 줄로 넘어감)
+# With show=True you can rotate it with the mouse in a window (close the window to move on to the next line)
 
 sh = res_shift['shift']
-sh.sort_values('norm', ascending=False).head(10)     # 많이 움직인 순
-sh.sort_values('gene_sim').head(10)                  # 위치가 많이 바뀐 순
+sh.sort_values('norm', ascending=False).head(10)     # Ordered by how much they moved
+sh.sort_values('gene_sim').head(10)                  # Ordered by how much their position changed
 sh.to_csv(out_dir + 'shift.csv')
 ```
 
 ### 6. t-SNE
 
 ```python
-ts = cscr.shift_tsne(sh, perplexity=30, random_state=5)      # norm, cent_sim, gene_sim 으로 2D
+ts = cscr.shift_tsne(sh, perplexity=30, random_state=5)      # 2D from norm, cent_sim, gene_sim
 cscr.plot_shift_tsne(ts, colors=col, highlight=required_genes,
                      savepath=plot_dir + 'tsne.jpg')
-# colors 대신 color_col='norm' 처럼 지표 값으로 칠할 수도 있음
+# Instead of colors, you can also color by a metric value, e.g. color_col='norm'
 ```
 
-### 7. MCL 클러스터 + Sankey
+### 7. MCL clusters + Sankey
 
-조건별 CAP 을 각각 MCL 로 클러스터링하고, 유전자가 base 클러스터에서 target 클러스터로 옮겨간 흐름을 그림.
+Cluster each condition's CAP with MCL, and plot the flow of genes from base clusters to target clusters.
 
 ```python
-# inflation 고르기
+# Choosing inflation
 scan0 = cscr.mcl_scan(caps[0])
 scan1 = cscr.mcl_scan(caps[1])
 cscr.plot_mcl_scan(scan0, 'Yoked',   savepath=plot_dir + 'mcl_scan_yoked.jpg')
 cscr.plot_mcl_scan(scan1, 'Trained', savepath=plot_dir + 'mcl_scan_trained.jpg')
 
-# 정한 inflation 으로 클러스터 (논문은 6.0)
+# Cluster with the chosen inflation (the paper uses 6.0)
 lab0 = cscr.mcl_clusters(caps[0], 6.0, candidates=required_genes)
 lab1 = cscr.mcl_clusters(caps[1], 6.0, candidates=required_genes)
 
-# Sankey (html, 브라우저에서 열기)
+# Sankey (html, open in a browser)
 cscr.plot_cluster_sankey(lab0, lab1, label_base='Yoked', label_target='Trained',
                          savepath=plot_dir + 'sankey.html')
 ```
 
-- `mcl_clusters` 결과에서 -1 은 어느 클러스터에도 들어가지 않은 유전자.
-- Sankey 는 `min_count=2` 미만인 흐름은 생략.
+- In the `mcl_clusters` result, -1 means a gene that was not assigned to any cluster.
+- The Sankey omits flows below `min_count=2`.
 
 ---
-
-
-
-
-

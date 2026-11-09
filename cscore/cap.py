@@ -1,5 +1,5 @@
-"""C-SCoRe 코어: xi / Spearman 기반 연관 점수, all-pairs 행렬, consensus Louvain (CAP).
-프로젝트 경로나 메타데이터에 의존하지 않음. 저장은 out_path 를 줄 때만.
+"""C-SCoRe core: association scores based on xi / Spearman, all-pairs matrices, consensus Louvain (CAP).
+Does not depend on project paths or metadata. Saves only when out_path is given.
 """
 import os
 
@@ -11,17 +11,17 @@ from tqdm import tqdm
 
 
 # =====================================================================
-# 1. 단일 쌍 (gene vs target 처럼 소규모 반복용)
+# 1. Single pair (for small repeated use, e.g. gene vs target)
 # =====================================================================
 
 def xi_cor(x, y, rng=None):
     """Chatterjee xi(x -> y). r_i=#{Y_j<=Y_i}(max), l_i=#{Y_j>=Y_i}(max on -y).
-    X에 tie가 있으면 rng(np.random.Generator)를 넘겨 무작위로 깨는 것을 권장."""
+    If X has ties, it is recommended to pass rng (np.random.Generator) to break them randomly."""
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     n = len(x)
     if rng is not None:
-        order = np.lexsort((rng.random(n), x))  # 다중정렬, 뒤로 올수록 중요
+        order = np.lexsort((rng.random(n), x))  # multi-key sort, later keys take priority
     else:
         order = np.argsort(x, kind='stable')
     ys = y[order]
@@ -35,7 +35,7 @@ def xi_cor(x, y, rng=None):
 
 
 def get_new_xi(n, old_xi):
-    """xi_new = xi * (n+1)/(n-2) (완전 단조, tie 없는 경우 exact)"""
+    """xi_new = xi * (n+1)/(n-2) (exact for perfectly monotone data with no ties)"""
     if n <= 2:
         return old_xi
     new = old_xi * (n + 1) / (n - 2)
@@ -74,8 +74,8 @@ def compute_metrics(X_re, Y_re, n, symmetric=False, rng=None):
 
 
 def gene_vs_target(expr, target, genes=None, n_jobs=10):
-    """expr: samples x genes DataFrame, target: 같은 샘플 순서의 값 (예: 행동 PC1).
-    유전자마다 compute_metrics(gene, target). 반환: ID 컬럼이 있는 DataFrame (저장 안 함)."""
+    """expr: samples x genes DataFrame, target: values in the same sample order (e.g. behavior PC1).
+    Runs compute_metrics(gene, target) for each gene. Returns: DataFrame with an ID column (not saved)."""
     genes = list(expr.columns) if genes is None else list(genes)
     t = np.asarray(target, dtype=float)
     n = len(expr)
@@ -90,7 +90,7 @@ def gene_vs_target(expr, target, genes=None, n_jobs=10):
 
 
 def select_genes(*tables, p_col='Z_pv', thr=0.05):
-    """gene_vs_target 결과 여러 개에서 p<thr 유전자 합집합."""
+    """Union of genes with p<thr across multiple gene_vs_target results."""
     out = []
     for df in tables:
         out += list(df.loc[df[p_col] < thr, 'ID'])
@@ -98,17 +98,17 @@ def select_genes(*tables, p_col='Z_pv', thr=0.05):
 
 
 # =====================================================================
-# 2. 벡터화된 all-pairs 계산
+# 2. Vectorized all-pairs computation
 # =====================================================================
 
 def build_rank_cache(X):
-    """X: (p, n) 배열. 행=유전자, 열=샘플."""
+    """X: (p, n) array. Rows = genes, columns = samples."""
     X = np.asarray(X, dtype=float)
     p, n = X.shape
-    R_max = stats.rankdata(X, method='max', axis=1)     # 분자용 r_i = #{Y_j<=Y_i}
-    L = stats.rankdata(-X, method='max', axis=1)         # 분모용 l_i = #{Y_j>=Y_i}
-    R_avg = stats.rankdata(X, method='average', axis=1)  # Spearman용
-    # X tie를 랜덤하게 깨서 정렬 (고정 seed로 재현성 확보)
+    R_max = stats.rankdata(X, method='max', axis=1)     # numerator r_i = #{Y_j<=Y_i}
+    L = stats.rankdata(-X, method='max', axis=1)         # denominator l_i = #{Y_j>=Y_i}
+    R_avg = stats.rankdata(X, method='average', axis=1)  # for Spearman
+    # Sort with X ties broken randomly (fixed seed for reproducibility)
     rng = np.random.default_rng(0)
     jitter = rng.random(X.shape)
     perm = np.lexsort((jitter, X), axis=1) if False else np.argsort(
@@ -118,10 +118,10 @@ def build_rank_cache(X):
 
 
 def xi_matrix(cache_x, cache_y=None, n_jobs=1):
-    """비대칭 xi 행렬: XI[i, j] = xi(x_i -> y_j)."""
+    """Asymmetric xi matrix: XI[i, j] = xi(x_i -> y_j)."""
     cy = cache_x if cache_y is None else cache_y
     n = cache_x['n']
-    assert n == cy['n'], "샘플 수가 달라요 (같은 샘플 축이어야 함)"
+    assert n == cy['n'], "Sample counts differ (they must share the same sample axis)"
     R_y, D_y = cy['R_max'], cy['D']
     perm_x = cache_x['perm']
     p_x = cache_x['p']
@@ -143,7 +143,7 @@ def xi_matrix(cache_x, cache_y=None, n_jobs=1):
 
 
 def full_metric_matrices(X, n_jobs=1):
-    """한 데이터 안 모든 pair. X: (p, n)."""
+    """All pairs within one dataset. X: (p, n)."""
     cache = build_rank_cache(X)
     n = cache['n']
     XI_asym = xi_matrix(cache, n_jobs=n_jobs)
@@ -166,7 +166,7 @@ def full_metric_matrices(X, n_jobs=1):
 
 
 def cross_metric_matrices(X_a, X_b, n_jobs=1):
-    """두 데이터 A, B 사이 (p_a x p_b) 행렬들 (같은 샘플 축). symmetric xi = max(xi(a->b), xi(b->a))."""
+    """(p_a x p_b) matrices between two datasets A and B (same sample axis). symmetric xi = max(xi(a->b), xi(b->a))."""
     cr, cp = build_rank_cache(X_a), build_rank_cache(X_b)
     n = cr['n']
     XI_rp = xi_matrix(cr, cp, n_jobs=n_jobs)
@@ -196,7 +196,7 @@ def cross_metric_matrices(X_a, X_b, n_jobs=1):
 
 
 def matrices_to_long(mats, genes_a, genes_b=None):
-    """행렬 -> 기존 CSV(geneA, geneB, ...)와 호환되는 long format."""
+    """Matrices -> long format compatible with the existing CSVs (geneA, geneB, ...)."""
     if genes_b is None:
         iu = np.triu_indices(len(genes_a), k=1)
         rows = {k: v[iu] for k, v in mats.items()}
@@ -214,14 +214,14 @@ def matrices_to_long(mats, genes_a, genes_b=None):
 
 
 def pairwise_single(expr, genes, n_jobs=8):
-    """expr: samples x genes DataFrame -> 한 omic 안 all-pairs long DataFrame."""
+    """expr: samples x genes DataFrame -> all-pairs long DataFrame within one omic."""
     genes = list(genes)
     X = expr[genes].astype(float).values.T  # (p, n)
     return matrices_to_long(full_metric_matrices(X, n_jobs=n_jobs), genes)
 
 
 def pairwise_cross(expr_a, expr_b, genes_a, genes_b, samples=None, n_jobs=8):
-    """두 omic 사이 all-pairs long DataFrame (같은 샘플 축)."""
+    """All-pairs long DataFrame between two omics (same sample axis)."""
     samples = list(expr_a.index) if samples is None else list(samples)
     genes_a, genes_b = list(genes_a), list(genes_b)
     Xa = expr_a.loc[samples, genes_a].astype(float).values.T
@@ -245,11 +245,11 @@ def _one_louvain(seed, G, node_index, n):
 def graph_process_ckpt(data, out_path=None, n_iter=1000, n_jobs=8,
                        checkpoints=(100, 200, 300, 500),
                        weight_col='SIGMA', edge_percentile=None):
-    """long format edge 표 -> Louvain n_iter 번 -> CAP (gene x gene co-assignment 확률).
-    - checkpoints 시점 누적 CAP 과 최종 CAP 의 correlation / max|diff| 보고
-    - 짝/홀 seed split-half CAP correlation + Spearman-Brown reliability 보고
-    - edge_percentile: 예) 50이면 weight 하위 50% edge 제거 후 클러스터링 (기본 None)
-    out_path 를 주면 CAP csv 와 .convergence.txt 로그 저장."""
+    """Long-format edge table -> Louvain n_iter times -> CAP (gene x gene co-assignment probability).
+    - Reports correlation / max|diff| between the cumulative CAP at each checkpoint and the final CAP
+    - Reports even/odd seed split-half CAP correlation + Spearman-Brown reliability
+    - edge_percentile: e.g. 50 removes the lowest 50% of edges by weight before clustering (default None)
+    If out_path is given, saves the CAP csv and a .convergence.txt log."""
     import networkx as nx
     df = data.rename(columns={weight_col: 'weight'}) if weight_col != 'weight' else data
     if edge_percentile is not None:
@@ -293,7 +293,7 @@ def graph_process_ckpt(data, out_path=None, n_iter=1000, n_jobs=8,
         log_lines.append(f"  corr(CAP_{k}, CAP_{n_iter}) = {r:.5f}, max|diff| = {mad:.4f}")
     half_r = np.corrcoef((agg_even / (n_iter // 2))[iu],
                          (agg_odd / (n_iter - n_iter // 2))[iu])[0, 1]
-    sb = 2 * half_r / (1 + half_r)  # Spearman-Brown: 전체 반복 수 기준 신뢰도 추정
+    sb = 2 * half_r / (1 + half_r)  # Spearman-Brown: reliability estimate for the full number of iterations
     log_lines.append(f"  split-half corr ({n_iter//2} vs {n_iter - n_iter//2}) = {half_r:.5f}"
                      f"  -> full reliability (Spearman-Brown) = {sb:.5f}")
     uniq = sorted(set(cluster_counts))

@@ -1,4 +1,4 @@
-"""모듈 비교: eigen 상관, 두 데이터(A, B) 모듈 짝, within-group 검정, partition 보존, 설계 비교, category 점수."""
+"""Module comparison: eigen correlation, module pairing between two datasets (A, B), within-group tests, partition preservation, design comparison, category scores."""
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
@@ -14,7 +14,7 @@ from .modules import module_eigengenes, module_symbols
 # eigen <-> other omic / behavior, module <-> module
 # ----------------------------------------------------------------------
 def compute_eigen_correlations(eigen_df, other_df, b):
-    """eigengene (module) vs 다른 omic 전체 feature, vs behavior (spearman)"""
+    """eigengene (module) vs all features of the other omic, vs behavior (spearman)"""
     e = eigen_df.values
     o = other_df.values
     bv = b.values if hasattr(b, 'values') else np.asarray(b)
@@ -24,7 +24,7 @@ def compute_eigen_correlations(eigen_df, other_df, b):
 
 
 def compute_module_module_correlations(eig_a, eig_b):
-    """A eigengene x B eigengene Spearman (같은 샘플)"""
+    """A eigengene x B eigengene Spearman (same samples)"""
     e = eig_a.values
     p = eig_b.values
     corr = _spearman_cols(e, p)
@@ -39,7 +39,7 @@ def compute_module_module_correlations(eig_a, eig_b):
 
 def compute_all_module_pair_overlaps(part_a, part_b, mm, id2sym_a=None, id2sym_b=None,
                                      background_genes=None):
-    """A 모듈 x B 모듈: eigen 상관 + 유전자 overlap (hypergeom). id2sym 이 None 이면 ID 그대로 비교"""
+    """A module x B module: eigen correlation + gene overlap (hypergeom). If id2sym is None, IDs are compared as they are"""
     id2sym_a, id2sym_b = id2sym_a or {}, id2sym_b or {}
     A_ids, B_ids = mm['module_ids_a'], mm['module_ids_b']
     corr, pcorr = mm['module_corr'], mm['pval_matrix']
@@ -76,10 +76,10 @@ def get_robust_pairs(df, corr_pval_thresh=0.05, overlap_pval_thresh=0.05, min_n=
 
 
 # ----------------------------------------------------------------------
-# within-group test (조건 효과 제거)
+# within-group test (removing the condition effect)
 # ----------------------------------------------------------------------
 def _group_rank_z(M, groups):
-    """그룹 안에서 rank -> z. 이어붙여 곱하면 '그룹 내 Spearman 의 표본수 가중 평균'"""
+    """Rank within each group -> z. Concatenating and multiplying gives the sample-size-weighted average of within-group Spearman"""
     out = np.zeros(M.shape, dtype=float)
     for g in np.unique(groups):
         m = groups == g
@@ -92,9 +92,9 @@ def _group_rank_z(M, groups):
 
 def within_group_pair_test(eg_r, eg_p, groups, n_perm=5000, seed=0):
     """A eigengene x B eigengene.
-    raw: 그룹 무시 Spearman / obs: 그룹 내 pooled Spearman / per_group: 그룹별
-    p_cell: 칸별 permutation p (B 샘플을 그룹 안에서만 섞음)
-    p_maxT: 전체 칸 max|r| null 과 비교한 다중비교 보정 p"""
+    raw: Spearman ignoring groups / obs: pooled within-group Spearman / per_group: per group
+    p_cell: per-cell permutation p (B samples are shuffled only within groups)
+    p_maxT: multiple-comparison-corrected p, compared against the null of max|r| over all cells"""
     idx = eg_r.index.intersection(eg_p.index)
     R, P = eg_r.loc[idx].values, eg_p.loc[idx].values
     g = np.asarray(groups.loc[idx].values)
@@ -142,9 +142,9 @@ def tidy_pairs(res):
 
 
 def pair_table_by_groups(expr_a, part_a, expr_b, part_b, groups, id2sym_a=None, id2sym_b=None, n_perm=5000):
-    """A 모듈 x B 모듈 한 표: within-group 상관 + 공유 유전자 안에서의 overlap.
-    expr_a, expr_b: samples x features (같은 샘플), part_a, part_b: {feature: module}
-    groups: 샘플 index 를 가진 Series (그룹 라벨). id2sym 이 None 이면 ID 그대로 비교."""
+    """One table of A module x B module: within-group correlation + overlap within shared genes.
+    expr_a, expr_b: samples x features (same samples), part_a, part_b: {feature: module}
+    groups: Series indexed by sample (group labels). If id2sym is None, IDs are compared as they are."""
     id2sym_a, id2sym_b = id2sym_a or {}, id2sym_b or {}
     eg_r, qc_r = module_eigengenes(expr_a, part_a)
     eg_p, qc_p = module_eigengenes(expr_b, part_b)
@@ -169,7 +169,7 @@ def pair_table_by_groups(expr_a, part_a, expr_b, part_b, groups, id2sym_a=None, 
 
 
 # ----------------------------------------------------------------------
-# partition 비교 / 보존
+# partition comparison / preservation
 # ----------------------------------------------------------------------
 def compare_partitions(partition_a, partition_b, name=''):
     common = sorted(set(partition_a) & set(partition_b))
@@ -188,7 +188,7 @@ def ari_between(pa, pb):
 
 
 def compute_module_preservation(partition, ref_expr, test_expr, min_genes=3):
-    """모듈 내부 mean |spearman| (ref vs test)."""
+    """Mean |spearman| within each module (ref vs test)."""
     cols = list(ref_expr.columns)
     pos = {c: i for i, c in enumerate(cols)}
     rv = ref_expr.values
@@ -206,7 +206,7 @@ def compute_module_preservation(partition, ref_expr, test_expr, min_genes=3):
 
 
 def compute_pairwise_preservation(partition_ref, partition_test, gene_list=None):
-    """ref 모듈 안 gene pair 가 test 에서도 같은 모듈인 비율."""
+    """Fraction of gene pairs in the same ref module that are also in the same module in test."""
     common = set(partition_ref) & set(partition_test)
     if gene_list is not None:
         common &= set(gene_list)
@@ -227,8 +227,8 @@ def compute_pairwise_preservation(partition_ref, partition_test, gene_list=None)
 
 
 def raw_vs_module(expr, partition, n_perm=20, seed=0):
-    """raw expression 의 Spearman 구조에서 모듈 안 |r| 이 모듈 밖 |r| 보다 큰가.
-    ratio = within/between, null_ratio = 모듈 라벨을 섞었을 때 (~1)"""
+    """In the Spearman structure of raw expression, is |r| within modules larger than |r| outside modules?
+    ratio = within/between, null_ratio = value when module labels are shuffled (~1)"""
     genes = [g for g in partition if g in expr.columns]
     R = np.abs(_spearman_mat(expr[genes].astype(float).values))
     lab = np.array([partition[g] for g in genes])
@@ -246,7 +246,7 @@ def raw_vs_module(expr, partition, n_perm=20, seed=0):
 
 
 # ----------------------------------------------------------------------
-# 설계 비교 (k 와 무관)
+# Design comparison (independent of k)
 # ----------------------------------------------------------------------
 def mantel(A, B, n_perm=500, seed=0):
     RA, iu = _rank_matrix(np.asarray(A, float))
@@ -292,7 +292,7 @@ def score_tables(mats, n_perm=500):
 
 
 def cap_edge_table(caps):
-    """caps: {label: CAP} -> 그룹 CAP 끼리 edge Spearman."""
+    """caps: {label: CAP} -> edge Spearman between group CAPs."""
     labs = list(caps)
     idx = caps[labs[0]].index
     for l in labs[1:]:
@@ -307,10 +307,10 @@ def cap_edge_table(caps):
 
 
 # ----------------------------------------------------------------------
-# 기능 프로파일 / category 점수
+# Functional profile / category scores
 # ----------------------------------------------------------------------
 def profile_similarity(mat_r, mat_p, cap=10):
-    """A 모듈(mat_r)과 B 모듈(mat_p)의 category enrichment 프로파일 cosine 유사도 (module x module)."""
+    """Cosine similarity of category enrichment profiles between A modules (mat_r) and B modules (mat_p) (module x module)."""
     cols = mat_r.columns.intersection(mat_p.columns)
     A = np.clip(mat_r[cols].values.astype(float), 0, cap)
     B = np.clip(mat_p[cols].values.astype(float), 0, cap)
@@ -319,8 +319,8 @@ def profile_similarity(mat_r, mat_p, cap=10):
 
 
 def global_concordance(link, func_sim, n_perm=5000, seed=0):
-    """모든 (A 모듈, B 모듈) 칸에서 |within_r| 와 기능 프로파일 유사도의 Spearman.
-    null: func_sim 의 행/열 라벨을 각각 독립적으로 섞음"""
+    """Spearman between |within_r| and functional profile similarity over all (A module, B module) cells.
+    null: shuffle the row/column labels of func_sim independently"""
     link = link.reindex(index=func_sim.index, columns=func_sim.columns)
     a, F = link.values.astype(float), func_sim.values.astype(float)
     if np.nanstd(F) == 0 or np.nanstd(a) == 0:
@@ -335,7 +335,7 @@ def global_concordance(link, func_sim, n_perm=5000, seed=0):
 
 
 def category_scores(expr, id2sym, cat_genes, min_size=3):
-    """샘플별 category 점수 = category 유전자 z-score 평균. expr: samples x genes(ID)"""
+    """Per-sample category score = mean z-score of the category's genes. expr: samples x genes(ID)"""
     sym = expr.rename(columns=lambda g: str(id2sym.get(g, g)).lower())
     sym = sym.T.groupby(level=0).mean().T
     Z = (sym - sym.mean()) / sym.std(ddof=0).replace(0, np.nan)
@@ -348,8 +348,8 @@ def category_scores(expr, id2sym, cat_genes, min_size=3):
 
 
 def category_diag_test(sr, sp, groups, n_perm=2000, seed=0):
-    """A category 점수(sr) vs B category 점수(sp) (그룹 내 Spearman).
-    통계 = mean(diag) - mean(offdiag), null = B 샘플을 그룹 안에서 섞음 (one-sided)."""
+    """A category scores (sr) vs B category scores (sp) (within-group Spearman).
+    Statistic = mean(diag) - mean(offdiag), null = B samples shuffled within groups (one-sided)."""
     cats = [c for c in sr.columns if c in sp.columns]
     idx = sr.index.intersection(sp.index)
     if len(cats) < 2 or len(idx) < 6:
