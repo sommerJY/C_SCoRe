@@ -1,16 +1,14 @@
-"""C-SCoRe: Correlation Signal Co-cluster Reduction.
+"""C-SCoRe: Correlation Signal Co-cluster Reduction (two-condition comparison).
 
-    import cscore as cs
-    cs.cap.xi_cor(x, y)
-    cs.modules.module_eigengenes(expr, partition)
+    import cscore as cscr
+    cscr.cap.xi_cor(x, y)
+    cscr.shift.cap_shift(caps, base=0, target=1)
 
-Frequently used functions are also available directly at the top level (cs.xi_cor, cs.graph_process_ckpt ...).
+All functions are also available directly at the top level (cscr.xi_cor, cscr.graph_process_ckpt ...).
 """
-from . import cap, modules, compare, enrich, plotting, pipeline, shift
+from . import cap, modules, plotting, pipeline, shift
 from .cap import *          # noqa: F401,F403
 from .modules import *      # noqa: F401,F403
-from .compare import *      # noqa: F401,F403
-from .enrich import *       # noqa: F401,F403
 from .plotting import *     # noqa: F401,F403
 from .pipeline import *     # noqa: F401,F403
 from .shift import *        # noqa: F401,F403

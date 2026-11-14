@@ -62,16 +62,6 @@ def _brighten(rgb, lightness=0.4):
     return colorsys.hls_to_rgb(h, max(l, lightness), s)
 
 
-def rgb_colors(scores, min_brightness=0.3, brighten=True):
-    """PC1-3 scores as RGB colors (as in the paper figure). Returns: gene -> hex Series"""
-    X = scores.iloc[:, :3]
-    rng = (X.max() - X.min()).replace(0, 1)
-    rgb = (X - X.min()) / rng
-    rgb = rgb * (1 - min_brightness) + min_brightness
-    f = _brighten if brighten else (lambda v: v)
-    return pd.Series([to_hex(f(tuple(r))) for r in rgb.values], index=X.index)
-
-
 def shift_tsne(shift, cols=('norm', 'cent_sim', 'gene_sim'), perplexity=30, random_state=5):
     """2D t-SNE from the shift metrics. Returns: comp1, comp2 + the metric columns used"""
     from sklearn.manifold import TSNE

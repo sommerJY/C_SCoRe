@@ -165,36 +165,6 @@ def full_metric_matrices(X, n_jobs=1):
                 SCOR2=SCOR2, PCOR2=PCOR2, SIGMA=SIGMA, Z_pv=Z_pv, XI_pv=XI_pv)
 
 
-def cross_metric_matrices(X_a, X_b, n_jobs=1):
-    """(p_a x p_b) matrices between two datasets A and B (same sample axis). symmetric xi = max(xi(a->b), xi(b->a))."""
-    cr, cp = build_rank_cache(X_a), build_rank_cache(X_b)
-    n = cr['n']
-    XI_rp = xi_matrix(cr, cp, n_jobs=n_jobs)
-    XI_pr = xi_matrix(cp, cr, n_jobs=n_jobs)
-    XI_ori = np.maximum(XI_rp, XI_pr.T)
-    XI_new = np.clip(XI_ori * (n + 1) / (n - 2), 0.0, 1.0) if n > 2 else XI_ori
-    Rr, Rp = cr['R_avg'], cp['R_avg']
-
-    def _cross_corr(A, B):
-        A = A - A.mean(1, keepdims=True)
-        B = B - B.mean(1, keepdims=True)
-        sa = np.sqrt((A ** 2).sum(1))
-        sb = np.sqrt((B ** 2).sum(1))
-        with np.errstate(invalid='ignore', divide='ignore'):
-            C = (A @ B.T) / np.outer(sa, sb)
-        return np.nan_to_num(C)
-
-    S = _cross_corr(Rr, Rp)
-    P = _cross_corr(np.asarray(X_a, float), np.asarray(X_b, float))
-    SCOR2, PCOR2 = np.abs(S), np.abs(P)
-    SIGMA = np.sqrt(SCOR2 ** 2 + XI_new ** 2)
-    z_xi = XI_ori / np.sqrt(0.4 / n)
-    z_rho = SCOR2 * np.sqrt(n - 1)
-    Z_pv = np.exp(-(z_xi ** 2 + z_rho ** 2) / 2.0)
-    return dict(XI_ori=XI_ori, XI_new=XI_new, SCOR=S, PCOR=P,
-                SCOR2=SCOR2, PCOR2=PCOR2, SIGMA=SIGMA, Z_pv=Z_pv)
-
-
 def matrices_to_long(mats, genes_a, genes_b=None):
     """Matrices -> long format compatible with the existing CSVs (geneA, geneB, ...)."""
     if genes_b is None:
@@ -220,15 +190,6 @@ def pairwise_single(expr, genes, n_jobs=8):
     return matrices_to_long(full_metric_matrices(X, n_jobs=n_jobs), genes)
 
 
-def pairwise_cross(expr_a, expr_b, genes_a, genes_b, samples=None, n_jobs=8):
-    """All-pairs long DataFrame between two omics (same sample axis)."""
-    samples = list(expr_a.index) if samples is None else list(samples)
-    genes_a, genes_b = list(genes_a), list(genes_b)
-    Xa = expr_a.loc[samples, genes_a].astype(float).values.T
-    Xb = expr_b.loc[samples, genes_b].astype(float).values.T
-    return matrices_to_long(cross_metric_matrices(Xa, Xb, n_jobs=n_jobs), genes_a, genes_b)
-
-
 # =====================================================================
 # 3. Consensus clustering (CAP)
 # =====================================================================
@@ -243,13 +204,10 @@ def _one_louvain(seed, G, node_index, n):
 
 
 def graph_process_ckpt(data, out_path=None, n_iter=1000, n_jobs=8,
-                       checkpoints=(100, 200, 300, 500),
                        weight_col='SIGMA', edge_percentile=None):
     """Long-format edge table -> Louvain n_iter times -> CAP (gene x gene co-assignment probability).
-    - Reports correlation / max|diff| between the cumulative CAP at each checkpoint and the final CAP
-    - Reports even/odd seed split-half CAP correlation + Spearman-Brown reliability
     - edge_percentile: e.g. 50 removes the lowest 50% of edges by weight before clustering (default None)
-    If out_path is given, saves the CAP csv and a .convergence.txt log."""
+    If out_path is given, saves the CAP csv."""
     import networkx as nx
     df = data.rename(columns={weight_col: 'weight'}) if weight_col != 'weight' else data
     if edge_percentile is not None:
@@ -266,44 +224,15 @@ def graph_process_ckpt(data, out_path=None, n_iter=1000, n_jobs=8,
         for s in tqdm(range(n_iter), desc=f"Clustering {desc}")
     )
     agg = np.zeros((n, n), dtype=np.uint32)
-    agg_even = np.zeros((n, n), dtype=np.uint32)
-    agg_odd = np.zeros((n, n), dtype=np.uint32)
-    cluster_counts = []
-    snapshots = {}
-    for k, labels in enumerate(all_labels, start=1):
+    for labels in all_labels:
         local = np.zeros((n, n), dtype=np.uint8)
         for cid in np.unique(labels):
             idx = np.where(labels == cid)[0]
             local[np.ix_(idx, idx)] = 1
         np.fill_diagonal(local, 0)
         agg += local
-        if k % 2 == 0:
-            agg_even += local
-        else:
-            agg_odd += local
-        cluster_counts.append(len(np.unique(labels)))
-        if k in checkpoints:
-            snapshots[k] = agg / k
     CAP = agg / n_iter
-    iu = np.triu_indices(n, k=1)
-    log_lines = [f"[Result] {out_path}"]
-    for k in sorted(snapshots):
-        r = np.corrcoef(snapshots[k][iu], CAP[iu])[0, 1]
-        mad = np.max(np.abs(snapshots[k][iu] - CAP[iu]))
-        log_lines.append(f"  corr(CAP_{k}, CAP_{n_iter}) = {r:.5f}, max|diff| = {mad:.4f}")
-    half_r = np.corrcoef((agg_even / (n_iter // 2))[iu],
-                         (agg_odd / (n_iter - n_iter // 2))[iu])[0, 1]
-    sb = 2 * half_r / (1 + half_r)  # Spearman-Brown: reliability estimate for the full number of iterations
-    log_lines.append(f"  split-half corr ({n_iter//2} vs {n_iter - n_iter//2}) = {half_r:.5f}"
-                     f"  -> full reliability (Spearman-Brown) = {sb:.5f}")
-    uniq = sorted(set(cluster_counts))
-    log_lines.append(f"  cluster count distribution: {[(s, cluster_counts.count(s)) for s in uniq]}")
-    log_text = "\n".join(log_lines)
-    print("\n" + log_text)
     co_matrix_df = pd.DataFrame(CAP, index=nodes, columns=nodes)
     if out_path:
-        convergence_path = out_path.rsplit('.csv', 1)[0] + '.convergence.txt'
-        with open(convergence_path, 'a') as f:
-            f.write(log_text + "\n\n")
         co_matrix_df.to_csv(out_path)
     return co_matrix_df

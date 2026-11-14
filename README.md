@@ -1,57 +1,82 @@
-# cscore
+# C-SCoRe
 
-C-SCoRe (Correlation Signal Co-cluster Reduction) analysis package.
+C-SCoRe (Correlation Signal Co-cluster Reduction) analysis package
+
+## Citation
+
+If you use C-SCoRe, please cite:
+
+> Han J, et al. Persistently Increased Expression of PKMzeta and Unbiased Gene Expression Profiles Identify Hippocampal Molecular Traces of a Long-Term Active Place Avoidance Memory and "Shadow" Proteins. *Advanced Science* (2026). https://doi.org/10.1002/advs.202521254
+
+
 
 ## 0. Installation
 
-### Packages needed
+### Download
 
-| Purpose | Packages (pip names) |
-|---|---|
-| Core computation | `numpy`, `pandas`, `scipy`, `statsmodels`, `scikit-learn`, `joblib`, `tqdm` |
-| CAP (Louvain) | `networkx`, `python-louvain` (imported as `community`) |
-| Figures | `matplotlib`, `seaborn` |
-| MCL, Sankey (step 7) | `markov_clustering`, `plotly` |
-| GO analysis (enrich.py) | `gprofiler-official` |
-
-Python 3.9 or later.
-
-
-
-### Method 1: Install as a package
+Download the code from GitHub (no `pip install` of the package itself is needed).
 
 ```bash
-cd cscore
-pip install -e .              # Also installs the core packages. No need to reinstall after editing the code.
-pip install -e ".[enrich]"    # Use this if you also need MCL, Sankey, and GO
+git clone https://github.com/sommerJY/C_SCoRe.git
 ```
 
-### Method 2: Use the folder directly, without installing
+Or use **Code > Download ZIP** on the GitHub page and unzip it.
 
-Install the required packages yourself, then add the path and import.
+### Required packages
+
+Tested with Python 3.12.6.
+
+| Purpose | Package (pip name) | Tested version |
+|---|---|---|
+| Core computation | `numpy` | 2.4.3 |
+| | `pandas` | 3.0.1 |
+| | `scipy` | 1.17.1 |
+| | `statsmodels` | 0.14.6 |
+| | `scikit-learn` | 1.8.0 |
+| | `joblib` | 1.5.3 |
+| | `tqdm` | 4.67.3 |
+| CAP (Louvain) | `networkx` | 3.6.1 |
+| | `python-louvain` (imported as `community`) | 0.16 |
+| Figures | `matplotlib` | 3.10.8 |
+| | `seaborn` | 0.13.2 |
+| MCL, Sankey (step 7) | `markov_clustering` | 0.0.6 |
+| | `plotly` | 6.6.0 |
+| GO analysis (enrich.py) | `gprofiler-official` | 1.0.0 |
+
+
+Install each package individually, for example:
 
 ```bash
-pip install numpy pandas scipy statsmodels scikit-learn joblib tqdm \
-            networkx python-louvain matplotlib seaborn \
-            markov_clustering plotly gprofiler-official
+pip install numpy
+pip install pandas
+pip install python-louvain
+...
 ```
 
-If you use a conda environment, install while that environment is active (`conda activate env_name`).
-If you still get `No module named ...`, the package was installed in a different environment.
-Check the current environment in Python with `import sys; print(sys.executable)`,
-then install with that path, e.g. `/.../bin/python -m pip install package_name`, to be sure.
+To match the tested version exactly: `pip install numpy==x.y.z`
 
-Note: `pip install community` is a different package and Louvain will not work with it. You must install `python-louvain`.
+Notes
+- `pip install community` is a different package and Louvain will not work with it. You must install `python-louvain`.
+- If you use a conda environment, install while that environment is active (`conda activate env_name`).
+- If you still get `No module named ...`, the package was installed in a different environment.
+  Check the current environment in Python with `import sys; print(sys.executable)`,
+  then install with that path, e.g. `/.../bin/python -m pip install package_name`.
+
+### Import
 
 ```python
+
 import sys
 sys.path.append('/path/to/cscore_pkg')    # The folder directly above the cscore folder
+sys.path.append('.')
 import cscore as cscr
 import numpy as np
 import pandas as pd
 
-out_dir  = '/path/to/data_out/'     # Where CAPs and tables are saved (create it beforehand)
-plot_dir = '/path/to/figures/'      # Where figures are saved (create it beforehand)
+in_dir = 'example/data/'
+out_dir = 'example/results/'    
+plot_dir = 'example/figure/'     
+
 ```
 
 ## Structure
@@ -61,137 +86,101 @@ cscore/
   cap.py       xi_cor, gene vs behavior, pairwise matrix, consensus Louvain (CAP)
   pipeline.py  input format check (check_inputs), run everything at once (run_cscore)
   shift.py     CAP change between conditions (PCA shift), RGB colors, t-SNE
-  modules.py   CAP -> modules (spectral, choosing k, eigengene, MCL)
-  compare.py   module comparison, within-group tests, partition preservation, Mantel/CKA
-  enrich.py    gene set enrichment, gProfiler, term clustering
+  modules.py   MCL clustering of each condition's CAP
   plotting.py  figures (saved only when savepath is given)
+example/
+  data/        example input 
+  results/    CAPs and tables from the example are saved here
+  figure/     figures from the example are saved here
 ```
 
 ---
 
-## Basic analysis (comparing 2 conditions)
+## Example: run the whole analysis on the example data
+The example data is dentate gyrus (DG) bulk RNA-seq, 1 day after training, from the paper.
+It has three files, all indexed by the same sample IDs:
+`expression.csv` (samples x genes), `behavior.csv` (behavior PC1), and `condition.csv` (0 = Yoked, 1 = Trained).
 
-### 1. Preparing the inputs
-
-All three inputs must have **the same sample IDs as their index**.
-
-| Name | Format | Example |
-|---|---|---|
-| `expr` | samples x genes DataFrame (numeric only) | Normalized expression values |
-| `beh` | 1-column DataFrame or Series | Behavior PC1 |
-| `conds` | 1-column DataFrame or Series | Condition labels (0/1, 'yoked'/'trained', etc.) |
+Run from the top folder of the downloaded repository. Each CAP with `n_iter=1000` takes about 10 min.
 
 ```python
-df = pd.read_csv('my_data.csv', index_col=0)
 
-expr  = df[gene_list];      expr.index  = df.SampleID
-beh   = df[['PC1']];        beh.index   = df.SampleID
-conds = df[['condition']];  conds.index = df.SampleID
+import os
+import cscore as cscr
+import pandas as pd
+import numpy as np
 
-expr2, beh2, conds2 = cscr.check_inputs(expr, beh, conds)
-# [check] samples=14, genes=..., conds={0: 7, 1: 7}
-```
+os.makedirs(out_dir, exist_ok=True)
+os.makedirs(plot_dir, exist_ok=True)
 
-`check_inputs` checks that sample IDs match, values are numeric, and there are no NaNs or duplicates, and it aligns everything to the same order.
-Genes with identical values across all samples are removed. **Use `expr2`, `beh2`, and `conds2` in the following steps.**
+# Inputs
 
-### 2. Selecting behavior-related genes
+beh = pd.read_csv(in_dir+'behavior.csv', index_col = 0)
+expr = pd.read_csv(in_dir+'expression.csv', index_col = 0)
+conds = pd.read_csv(in_dir+'condition.csv', index_col = 0)
 
-```python
-res_gene = cscr.gene_vs_target(expr2, beh2)        # Spearman + xi for each gene
-res_gene.to_csv(out_dir + 'gene_scores.csv')
+expr, beh, conds = cscr.check_inputs(expr, beh, conds) # checking the format 
 
-sel = cscr.select_genes(res_gene)                  # Z_pv < 0.05
-required_genes = ['Fos', 'Arc', 'Npas4']           # Genes to always include (e.g. candidates)
-sel = sorted(set(sel) | {g for g in required_genes if g in expr2.columns})
+# Behavior-related genes 
+res = cscr.gene_vs_target(expr, beh)
+res.to_csv(out_dir + 'gene_scores.csv')
+
+sel = cscr.select_genes(res)                  # Z_pv < 0.05
+print(len(sel))
+
+required_gene_list = [
+    "Fos", "Fosl2", "Npas4", "Arc", "Grin1", "Gria1", "Gria2", "Pick1", "Nsf",
+    "Numb", "Fmr1", "Camk2a", "Wwc1", "Prkcb", "Prkcz", "Prkci"]
+
+sel = sorted(set(sel) | {g for g in required_gene_list if g in expr.columns})
 print('selected genes:', len(sel))
-```
 
-### 3. Building CAPs (overall / per condition)
-
-All CAPs are built with the same gene list (`sel`). The diagonal is 1.
-
-```python
-sets = {'all': expr2.index,
-        0: conds2.index[conds2 == 0],
-        1: conds2.index[conds2 == 1]}
+# CAPs (about 10 min each)
+sets = {'all': expr.index,
+        0: conds.index[conds == 0],
+        1: conds.index[conds == 1]}
 
 caps = {}
 for label, idx in sets.items():
-    long = cscr.pairwise_single(expr2.loc[idx], sel)
+    long = cscr.pairwise_single(expr.loc[idx], sel)
     cap = cscr.graph_process_ckpt(long, out_dir + f'CAP_{label}.csv', n_iter=1000)
     cap = cap.reindex(index=sel, columns=sel).fillna(0.0)
     a = cap.values.copy(); np.fill_diagonal(a, 1)
     caps[label] = pd.DataFrame(a, index=sel, columns=sel)
-```
 
-- This step takes a long time. First run through once with `n_iter=20`, then run again with 1000.
-- A convergence log is saved to `CAP_{label}.convergence.txt` (correlation per checkpoint, split-half reliability).
-- Steps 2 and 3 can also be done in one line with `cscr.run_cscore(expr, beh, conds, add_genes=required_genes, out_dir=out_dir)`.
-  The resulting `out['caps']` is the same as `caps` above.
+# Shift in the shared PCA space
+cscr.plot_pc_spectrum(cscr.cap_pca_spectrum(caps['all']), savepath=plot_dir + 'pc_spectrum.jpg')   # check that 3 PCs are enough
+res_cscore = cscr.cap_shift(caps, base=0, target=1, n_components=3)            # 1 - 0
 
-### 4. Change between conditions in the same PCA space (shift)
+col = cscr.rgb_colors(res_cscore['scores'][1], invert='G')                     # colors from target (1) scores, G flipped
+cscr.plot_cap_pca_3d(res_cscore, colors=col, highlight=required_gene_list,
+                     label_base='Yoked', label_target='Trained', show=True)
 
-Fit PCA on the overall CAP, project each condition's CAP onto the same axes, and compute the shift for each gene.
+sh = res_cscore['shift']
+print(sh.sort_values('norm', ascending=False).head(10))                 # moved the most
+print(sh.sort_values('gene_sim').head(10))                              # direction changed the most
 
-```python
-cscr.plot_pc_spectrum(cscr.cap_pca_spectrum(caps['all']),
-                      savepath=plot_dir + 'pc_spectrum.jpg')     # Check that 3 PCs are enough
+# t-SNE
+ts = cscr.shift_tsne(sh, perplexity=50, random_state=42)
+cscr.plot_shift_tsne(ts, colors=col, highlight=required_gene_list, savepath=plot_dir + 'tsne.jpg')
+cscr.plot_shift_tsne(ts, color_col='norm', highlight=required_gene_list,
+                     savepath=plot_dir + 'tsne_norm.jpg')     # colored by distance moved (viridis)
 
-res_shift = cscr.cap_shift(caps, base=0, target=1, n_components=3)   # target - base
-```
-
-- `base`: the reference condition. `target`: the condition to compare. Labels are the values in `conds` as they are.
-- `res_shift['shift']` columns
-  - `norm`: distance moved from base to target
-  - `centroid`, `cent_sim`: projection onto / cosine with the overall direction of movement
-  - `PCdot`, `gene_sim`: dot product / cosine between the base position and the target position (lower means the position changed more)
-
-### 5. 3D figure + ranking
-
-```python
-col = cscr.rgb_colors(res_shift['scores'][1], invert='G')    # RGB colors from the target score. invert flips a channel
-cscr.plot_cap_pca_3d(res_shift, colors=col, highlight=required_genes,
-                     label_base='Yoked', label_target='Trained',
-                     savepath=plot_dir + 'cap_pca_3d.jpg')
-# With show=True you can rotate it with the mouse in a window (close the window to move on to the next line)
-
-sh = res_shift['shift']
-sh.sort_values('norm', ascending=False).head(10)     # Ordered by how much they moved
-sh.sort_values('gene_sim').head(10)                  # Ordered by how much their position changed
-sh.to_csv(out_dir + 'shift.csv')
-```
-
-### 6. t-SNE
-
-```python
-ts = cscr.shift_tsne(sh, perplexity=30, random_state=5)      # 2D from norm, cent_sim, gene_sim
-cscr.plot_shift_tsne(ts, colors=col, highlight=required_genes,
-                     savepath=plot_dir + 'tsne.jpg')
-# Instead of colors, you can also color by a metric value, e.g. color_col='norm'
-```
-
-### 7. MCL clusters + Sankey
-
-Cluster each condition's CAP with MCL, and plot the flow of genes from base clusters to target clusters.
-
-```python
-# Choosing inflation
+# MCL: choosing inflation
 scan0 = cscr.mcl_scan(caps[0])
 scan1 = cscr.mcl_scan(caps[1])
-cscr.plot_mcl_scan(scan0, 'Yoked',   savepath=plot_dir + 'mcl_scan_yoked.jpg')
+cscr.plot_mcl_scan(scan0, 'Yoked', savepath=plot_dir + 'mcl_scan_yoked.jpg')
 cscr.plot_mcl_scan(scan1, 'Trained', savepath=plot_dir + 'mcl_scan_trained.jpg')
 
-# Cluster with the chosen inflation (the paper uses 6.0)
-lab0 = cscr.mcl_clusters(caps[0], 6.0, candidates=required_genes)
-lab1 = cscr.mcl_clusters(caps[1], 6.0, candidates=required_genes)
+# Clusters with the chosen inflation (the paper uses 6.0)
+lab0 = cscr.mcl_clusters(caps[0], 6.0, candidates=required_gene_list)
+lab1 = cscr.mcl_clusters(caps[1], 6.0, candidates=required_gene_list)
 
-# Sankey (html, open in a browser)
+# Sankey (html)
 cscr.plot_cluster_sankey(lab0, lab1, label_base='Yoked', label_target='Trained',
                          savepath=plot_dir + 'sankey.html')
 ```
 
-- In the `mcl_clusters` result, -1 means a gene that was not assigned to any cluster.
-- The Sankey omits flows below `min_count=2`.
 
----
+
+
