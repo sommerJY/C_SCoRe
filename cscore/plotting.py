@@ -36,7 +36,7 @@ def plot_cap_clustermap_real(name, CAP, partition, savepath=None):
     rc = pd.Series([cmap_map[partition[g]] for g in CAP.index], index=CAP.index, name='module')
     g = sns.clustermap(CAP, row_colors=rc, col_colors=rc, cmap='bwr', center=0, vmin=-1, vmax=1,
                        xticklabels=False, yticklabels=False, cbar_pos=None,
-                       row_cluster=True, col_cluster=True, figsize=(5, 5))
+                       row_cluster=True, col_cluster=True, method='complete', metric='correlation', figsize=(5, 5))
     g.fig.suptitle(name, fontsize=10)
     g.fig.subplots_adjust(top=0.93)
     if savepath:
